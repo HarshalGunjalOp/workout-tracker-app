@@ -1521,10 +1521,9 @@ svg {
 .set-table-header,
 .set-row {
   display: grid;
-  grid-template-columns: 32px minmax(65px, 1.1fr) minmax(60px, 1fr) minmax(
-      60px,
-      1fr
-    ) 39px;
+  grid-template-columns:
+    32px minmax(65px, 1.1fr) minmax(60px, 1fr) minmax(60px, 1fr)
+    39px;
   gap: 13px;
   align-items: center;
   text-align: center;
@@ -3032,10 +3031,9 @@ svg {
   }
   .set-table-header,
   .set-row {
-    grid-template-columns: 24px minmax(55px, 0.85fr) minmax(55px, 1fr) minmax(
-        50px,
-        1fr
-      ) 39px;
+    grid-template-columns:
+      24px minmax(55px, 0.85fr) minmax(55px, 1fr) minmax(50px, 1fr)
+      39px;
     gap: 8px;
   }
   .set-table-header {
@@ -3193,10 +3191,9 @@ svg {
   .set-table-header,
   .set-row {
     gap: 6px;
-    grid-template-columns: 20px minmax(45px, 0.8fr) minmax(45px, 1fr) minmax(
-        45px,
-        1fr
-      ) 36px;
+    grid-template-columns:
+      20px minmax(45px, 0.8fr) minmax(45px, 1fr) minmax(45px, 1fr)
+      36px;
   }
   .log-button {
     width: 36px;
@@ -3401,4 +3398,25 @@ svg {
   .workout-heading > .text-button {
     font-size: 10px;
   }
+}
+.discard-area {
+  margin-top: 20px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+.discard-area > p {
+  font-size: 11px;
+  color: #9c927f;
+  margin-bottom: 12px;
+}
+.discard-button {
+  font-size: 11px;
+  color: #a18b70;
+  padding: 10px;
+}
+.discard-area > .text-button {
+  margin-left: 15px;
+}
+.discard-button:hover {
+  color: #805638;
 }

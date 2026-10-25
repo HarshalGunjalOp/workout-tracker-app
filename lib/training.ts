@@ -11,6 +11,7 @@ export type Session = {
   dayId: string;
   startedAt: string;
   finishedAt: string | null;
+  discardedAt?: string;
   updatedAt: string;
   movements: MovementLog[];
   note: string;
@@ -58,7 +59,7 @@ export function previousMovement(
   exclude?: string,
 ): MovementLog | undefined {
   return [...history]
-    .filter((s) => s.finishedAt && s.id !== exclude)
+    .filter((s) => s.finishedAt && !s.discardedAt && s.id !== exclude)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     .flatMap((s) => s.movements)
     .find((m) => m.exerciseId === id);

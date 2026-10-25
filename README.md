@@ -35,6 +35,8 @@ Open `https://your-domain/#key=YOUR_OWNER_KEY` once on each device. The app exch
 npm run typecheck
 npm test
 npm run build
+# Development API round-trip (with the dev server running):
+node tests/api.mjs
 ```
 
 ## Deployment

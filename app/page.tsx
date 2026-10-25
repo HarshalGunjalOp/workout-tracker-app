@@ -117,6 +117,7 @@ export default function Home() {
     [detail, setDetail] = useState<Session | null>(null),
     [summary, setSummary] = useState<Session | null>(null),
     [finishPrompt, setFinishPrompt] = useState(false),
+    [discardConfirm, setDiscardConfirm] = useState(false),
     [sound, setSound] = useState(true),
     [restEnd, setRestEnd] = useState<number | null>(null),
     [restLength, setRestLength] = useState(90),
@@ -134,7 +135,7 @@ export default function Home() {
     hydratedRemote = useRef(false);
   current.current = sessions;
   const active = sessions.find((s) => s.id === activeId),
-    history = sessions.filter((s) => s.finishedAt),
+    history = sessions.filter((s) => s.finishedAt && !s.discardedAt),
     day = PLAN.find((d) => d.id === active?.dayId) ?? selected;
   const showNotice = useCallback((s: string) => setNotice(s), []);
   useEffect(() => {
@@ -396,7 +397,7 @@ export default function Home() {
       showNotice("Finish or resume your current workout first.");
       return;
     }
-    const draft = sessions.find((s) => !s.finishedAt);
+    const draft = sessions.find((s) => !s.finishedAt && !s.discardedAt);
     if (draft) {
       setActiveId(draft.id);
       setExpanded(draft.movements[0].exerciseId);
@@ -679,7 +680,11 @@ export default function Home() {
                 <span /> IN SESSION ·{" "}
                 {clock(
                   Math.floor(
-                    (now - new Date(active.startedAt).getTime()) / 1000,
+                    ((active.finishedAt
+                      ? new Date(active.finishedAt).getTime()
+                      : now) -
+                      new Date(active.startedAt).getTime()) /
+                      1000,
                   ),
                 )}
               </span>
@@ -697,7 +702,10 @@ export default function Home() {
               </div>
               <button
                 className="dark-button"
-                onClick={() => setFinishPrompt(true)}
+                onClick={() => (
+                  setDiscardConfirm(false),
+                  setFinishPrompt(true)
+                )}
               >
                 Finish <CheckCheck size={18} />
               </button>
@@ -976,7 +984,9 @@ export default function Home() {
                                         }),
                                     50,
                                   );
-                                } else setFinishPrompt(true);
+                                } else
+                                  (setDiscardConfirm(false),
+                                    setFinishPrompt(true));
                               }}
                             >
                               {" "}
@@ -1004,7 +1014,10 @@ export default function Home() {
                 </label>
                 <button
                   className="finish-wide dark-button"
-                  onClick={() => setFinishPrompt(true)}
+                  onClick={() => (
+                    setDiscardConfirm(false),
+                    setFinishPrompt(true)
+                  )}
                 >
                   Finish workout <CheckCheck size={18} />
                 </button>
@@ -1113,11 +1126,13 @@ export default function Home() {
                     <span /> THE V-TAPER PROJECT
                   </div>
                 </div>
-                {sessions.find((s) => !s.finishedAt) && (
+                {sessions.find((s) => !s.finishedAt && !s.discardedAt) && (
                   <button
                     className="resume-banner"
                     onClick={() => {
-                      const s = sessions.find((s) => !s.finishedAt)!;
+                      const s = sessions.find(
+                        (s) => !s.finishedAt && !s.discardedAt,
+                      )!;
                       setActiveId(s.id);
                       setExpanded(
                         s.movements.find((m) => !m.sets.every((s) => s.done))
@@ -1191,7 +1206,7 @@ export default function Home() {
                         className="lime-button"
                         onClick={() => start(selected)}
                       >
-                        {sessions.some((s) => !s.finishedAt)
+                        {sessions.some((s) => !s.finishedAt && !s.discardedAt)
                           ? "Resume workout"
                           : "Start workout"}
                         <ArrowUpRight size={21} />
@@ -1914,6 +1929,53 @@ export default function Home() {
             >
               Keep training <ArrowRight size={16} />
             </button>
+            {!active.finishedAt && (
+              <div className="discard-area">
+                {discardConfirm ? (
+                  <>
+                    <p>This session will be removed from your journal.</p>
+                    <button
+                      className="discard-button"
+                      onClick={() => {
+                        const timestamp = new Date().toISOString();
+                        setSessions((old) =>
+                          old.map((s) =>
+                            s.id === active.id
+                              ? {
+                                  ...s,
+                                  discardedAt: timestamp,
+                                  updatedAt: timestamp,
+                                }
+                              : s,
+                          ),
+                        );
+                        setActiveId(null);
+                        setRestEnd(null);
+                        setFinishPrompt(false);
+                        showNotice(
+                          "Session discarded. Start fresh whenever you’re ready.",
+                        );
+                      }}
+                    >
+                      Yes, discard session
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => setDiscardConfirm(false)}
+                    >
+                      Keep it
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="discard-button"
+                    onClick={() => setDiscardConfirm(true)}
+                  >
+                    Discard this session
+                  </button>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -2032,7 +2094,7 @@ export default function Home() {
             <button
               className="outline-button"
               onClick={() => {
-                if (sessions.some((s) => !s.finishedAt)) {
+                if (sessions.some((s) => !s.finishedAt && !s.discardedAt)) {
                   showNotice(
                     "Finish your current workout before editing this one.",
                   );

@@ -76,3 +76,10 @@ test("suggested day and dates use India time at day boundaries", () => {
   assert.equal(nextDay(new Date("2026-10-28T09:00:00Z")).id, "push");
   assert.equal(localDate("2026-10-25T23:00:00Z"), "2026-10-26");
 });
+
+test("discarded sessions never become previous-session targets", () => {
+  const s = makeSession(PLAN[0], [], "discarded", now);
+  s.finishedAt = now;
+  s.discardedAt = now;
+  assert.equal(previousMovement([s], s.movements[0].exerciseId), undefined);
+});

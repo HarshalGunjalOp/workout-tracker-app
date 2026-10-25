@@ -5,6 +5,7 @@ export const sessionSchema = z.object({
   startedAt: z.iso.datetime(),
   finishedAt: z.iso.datetime().nullable(),
   updatedAt: z.iso.datetime(),
+  discardedAt: z.iso.datetime().optional(),
   note: z.string().max(2000),
   movements: z
     .array(
@@ -23,8 +24,10 @@ export const sessionSchema = z.object({
               done: z.boolean(),
             }),
           )
+          .min(1)
           .max(20),
       }),
     )
+    .min(1)
     .max(30),
 });

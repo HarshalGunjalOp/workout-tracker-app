@@ -50,7 +50,7 @@ assert.equal(
 console.log("PASS invalid session rejected");
 const now = new Date().toISOString();
 const session = {
-  id: "00000000-0000-4000-8000-000000000001",
+  id: crypto.randomUUID(),
   dayId: "upper",
   startedAt: now,
   finishedAt: now,
