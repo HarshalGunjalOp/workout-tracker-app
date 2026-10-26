@@ -9,11 +9,9 @@ import {
   Plus,
   RotateCcw,
   Timer,
-  TrendingUp,
 } from "lucide-react";
 import type { Exercise } from "@/lib/plan";
-import type { MovementLog, Session, SetLog } from "@/lib/training";
-import { describeSet } from "@/lib/motivation";
+import type { MovementLog, Session } from "@/lib/training";
 
 const clock = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -83,7 +81,6 @@ export function SetLogger({
   mi,
   ex,
   previous,
-  weeklyBaseline,
   seconds,
   resting,
   canUndo,
@@ -99,7 +96,6 @@ export function SetLogger({
   mi: number;
   ex?: Exercise;
   previous?: MovementLog;
-  weeklyBaseline?: SetLog;
   seconds: number;
   resting: boolean;
   canUndo: boolean;
@@ -191,19 +187,6 @@ export function SetLogger({
               ? `${ex.min}–${ex.max} reps prepared. Choose your weight once.`
               : `${Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`} ready. Target: ${ex.min}–${ex.max} reps.`}
       </p>
-      <div className="weekly-target">
-        <TrendingUp size={18} aria-hidden="true" />
-        <div>
-          <strong>{weeklyBaseline ? `Last week · set ${si + 1}: ${describeSet(weeklyBaseline, ex.timed)}` : "Build this week’s benchmark"}</strong>
-          <span>{weeklyBaseline
-            ? ex.timed
-              ? `Match ${weeklyBaseline.reps}s. A longer controlled hold beats last week.`
-              : Number(set.weight) === Number(weeklyBaseline.weight) && Number(weeklyBaseline.reps) < ex.max
-                ? `${Math.min(ex.max, Number(weeklyBaseline.reps) + 1)} clean reps at the same load would beat last week.`
-                : `Aim for ${ex.min}–${ex.max} controlled reps. Match your best before adding load.`
-            : "No completed matching set last week. Every honest set gives you something to build on."}</span>
-        </div>
-      </div>
       <div className={"quick-values " + (ex.timed ? "timed" : "")}>
         {!ex.timed && (
           <Stepper
@@ -267,7 +250,7 @@ export function SetLogger({
         </div>
       )}
       <p className="quick-memory">
-        {ex.timed ? `Aim for ${ex.min}s with control.` : `Aim for ${ex.min}–${ex.max} clean reps. Log what you actually do.`} Changes carry to remaining sets.
+        Changes carry to your remaining sets. Just log when you’re done.
       </p>
       {resting && (
         <div className={"quick-rest " + (seconds === 0 ? "ready" : "")}>

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -33,13 +33,10 @@ import {
   Activity,
   Volume2,
   VolumeX,
-  Trophy,
 } from "lucide-react";
 import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
 import { sessionSchema } from "@/lib/schema";
 import { SetLogger } from "./components/set-logger";
-import { SetCelebration, WorkoutMission } from "./components/workout-motivation";
-import { buildReward, lastWeekSet, planProgress, sessionAchievements, type SetReward } from "@/lib/motivation";
 import {
   makeSession,
   editSet,
@@ -66,7 +63,7 @@ const date = (
     ...opts,
   }).format(new Date(s));
 const clock = (s: number) =>
-  `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
 const storage = "form-training-v1";
 function Emblem({ small = false }: { small?: boolean }) {
   return (
@@ -137,7 +134,6 @@ export default function Home() {
     si: number;
   } | null>(null);
   const lastLogTime = useRef(0);
-  const [reward, setReward] = useState<SetReward | null>(null);
   const synced = useRef<Record<string, string>>({}),
     current = useRef(sessions),
     fileRef = useRef<HTMLInputElement>(null),
@@ -418,7 +414,6 @@ export default function Home() {
   }
   function start(d: Day) {
     setNow(Date.now());
-    setReward(null);
     if (activeId) {
       showNotice("Finish or resume your current workout first.");
       return;
@@ -461,26 +456,7 @@ export default function Home() {
   ) {
     if (!/^\d*(\.\d*)?$/.test(value) || value.length > 8) return;
     if (field === "reps" && (!/^\d*$/.test(value) || value.length > 5)) return;
-    if (active?.movements[mi]?.sets[si]?.done) setReward(null);
     update((s) => editSet(s, mi, si, field, value, carryForward));
-  }
-  function celebrate(big: boolean, pr: boolean) {
-    navigator.vibrate?.(pr ? [40, 60, 40, 60, 100] : big ? [40, 60, 70] : 30);
-    if (!sound || !audioRef.current || !big) return;
-    try {
-      const ctx = audioRef.current;
-      ctx.resume().catch(() => {});
-      (pr ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99]).forEach((frequency, i) => {
-        const osc = ctx.createOscillator(), gain = ctx.createGain();
-        const at = ctx.currentTime + i * 0.11;
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = frequency;
-        gain.gain.setValueAtTime(0.065, at);
-        gain.gain.exponentialRampToValueAtTime(0.001, at + 0.25);
-        osc.start(at); osc.stop(at + 0.26);
-        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
-      });
-    } catch {}
   }
   function toggleSet(mi: number, si: number, ex: Exercise) {
     const set = active!.movements[mi].sets[si];
@@ -513,18 +489,21 @@ export default function Home() {
         m.sets.some((s, j) => !s.done && !(i === mi && j === si)),
       );
       setRestEnd(hasRemaining ? Date.now() + ex.rest * 1000 : null);
-      const nextSession = { ...active!, movements: active!.movements.map((m, i) => i === mi ? { ...m, sets: m.sets.map((s, j) => j === si ? { ...s, done: true } : s) } : m) };
-      const nextReward = buildReward(history, nextSession, day, mi, si, ex);
-      setReward(nextReward);
-      requestAnimationFrame(() => {
-        const card = document.querySelector(".set-reward");
-        if (card && (card.getBoundingClientRect().top < 75 || card.getBoundingClientRect().top > window.innerHeight / 2))
-          card.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
-      });
-      const pr = nextReward.achievement.records.length > 0;
-      celebrate(pr || !!nextReward.achievement.weeklyWin || nextReward.exerciseComplete || nextReward.allDone, pr);
-    } else { setReward(null); setRestEnd(null); }
+      navigator.vibrate?.(30);
+      const prev = previousMovement(
+        history,
+        active!.movements[mi].exerciseId,
+        active!.id,
+      )?.sets[si];
+      if (
+        prev?.done &&
+        Number(set.weight) * Number(set.reps) >
+          Number(prev.weight) * Number(prev.reps)
+      )
+        showNotice("More work than last time. Progress earned.");
+    }
   }
+
   function finish() {
     if (!active || !completedSets(active)) {
       showNotice("Log at least one set to finish your workout.");
@@ -605,11 +584,6 @@ export default function Home() {
     lastLogged?.sessionId === active.id &&
     active.movements[lastLogged.mi]?.sets[lastLogged.si]?.done
   );
-  const achievements = useMemo(() => active ? sessionAchievements(sessions, active, day) : null, [sessions, active, day]);
-  const progress = active ? planProgress(active, day) : null;
-  const summaryDay = PLAN.find((d) => d.id === summary?.dayId);
-  const summaryProgress = summary && summaryDay ? planProgress(summary, summaryDay) : null;
-  const summaryAchievements = useMemo(() => summary && summaryDay ? sessionAchievements(sessions, summary, summaryDay) : null, [sessions, summary, summaryDay]);
   const nav = [
     { id: "today" as Tab, label: "Today", icon: LayoutGrid },
     { id: "program" as Tab, label: "Your program", icon: Dumbbell },
@@ -774,10 +748,18 @@ export default function Home() {
                 Finish <CheckCheck size={18} />
               </button>
             </div>
-            {achievements && <WorkoutMission session={active} day={day} focusMi={focusMi} prs={achievements.prs} weeklyWins={achievements.weeklyWins} onSelect={(id) => {
-              setExpanded(id);
-              if (active.movements.find((m) => m.exerciseId === id)?.sets.every((s) => s.done)) showNotice("All sets for that movement are logged. Open Workout overview & edits to review them.");
-            }} />}
+            <div className="workout-progress">
+              <div className="progress-meta">
+                <strong>
+                  {done}
+                  <span> / {total} sets</span>
+                </strong>
+                <span>{fmt(volume(active))} kg lifted</span>
+              </div>
+              <div className="progress-track">
+                <i style={{ width: `${(done / total) * 100}%` }} />
+              </div>
+            </div>
             <details
               className={
                 "workout-warmup " + (done > 0 ? "workout-warmup-started" : "")
@@ -801,7 +783,6 @@ export default function Home() {
                 <span className="warmup-time">5 MIN</span>
               </button>
             </details>
-            <SetCelebration reward={reward?.sessionId === active.id && active.movements[reward.mi]?.sets[reward.si]?.done ? reward : null} />
             <SetLogger
               session={active}
               mi={focusMi}
@@ -815,7 +796,6 @@ export default function Home() {
                     )
                   : undefined
               }
-              weeklyBaseline={focusMovement && focusEx ? lastWeekSet(history, active, focusMovement.exerciseId, focusSi, focusEx.timed) : undefined}
               seconds={seconds}
               resting={restEnd !== null}
               canUndo={canUndo}
@@ -856,7 +836,6 @@ export default function Home() {
                 setExpanded(active.movements[lastLogged.mi].exerciseId);
                 setRestEnd(null);
                 setLastLogged(null);
-                setReward(null);
                 showNotice("Last set undone. Adjust it and log again.");
               }}
               onLater={() => {
@@ -989,7 +968,7 @@ export default function Home() {
                                   }
                                   key={si}
                                 >
-                                  <span className="set-index">{si + 1}{achievements?.badges[`${mi}:${si}`]?.records.length ? <Trophy size={12} className="set-pr-badge" aria-label="Personal record" /> : achievements?.badges[`${mi}:${si}`]?.weeklyWin ? <Flame size={12} className="set-pr-badge" aria-label="Beat last week" /> : null}</span>
+                                  <span className="set-index">{si + 1}</span>
                                   <span className="previous-set">
                                     {previous?.sets[si]?.done
                                       ? `${previous.sets[si].weight || "BW"} × ${previous.sets[si].reps}`
@@ -2058,8 +2037,6 @@ export default function Home() {
                 ? "Every set, checked off. Ready to save it?"
                 : `${total - done} sets left across ${active.movements.filter((m) => m.sets.some((s) => !s.done)).length} exercises. Next: ${focusMovement?.name ?? "your remaining sets"}.`}
             </p>
-            {progress && <p className="review-targets">{progress.done}/{progress.total} planned sets · {progress.targets} rep / hold targets met{progress.extras ? ` · ${progress.extras} extra sets` : ""}. {progress.targets < progress.done ? "Adjusted sets count as work, too. Log actual reps; no need to redo them." : ""}</p>}
-            {done < total && <ul className="remaining-movements">{active.movements.filter((m) => m.sets.some((s) => !s.done)).map((m) => <li key={m.exerciseId}><span>{m.name}</span><strong>{m.sets.filter((s) => !s.done).length} left</strong></li>)}</ul>}
             <div className="summary-stats">
               <div>
                 <strong>{done}</strong>
@@ -2094,7 +2071,7 @@ export default function Home() {
             >
               {done === total
                 ? "Save workout"
-                : `Finish & save ${done} logged sets`}{" "}
+                : `Finish & save ${done} logged ${done === 1 ? "set" : "sets"}`}{" "}
               <Check size={19} />
             </button>
             <button
@@ -2172,11 +2149,11 @@ export default function Home() {
             <div className="summary-symbol">
               <CheckCheck size={34} />
             </div>
-            <div className="eyebrow">{summaryProgress?.complete ? "MISSION COMPLETE" : "YOUR WORK IS IN THE BANK"}</div>
+            <div className="eyebrow">ANOTHER SESSION IN THE BANK</div>
             <h2>
-              {summaryProgress?.complete ? "Every planned set." : "Your effort counts."}
+              Stronger than
               <br />
-              {summaryProgress?.complete ? "You brought it home" : "Keep building"}<span>.</span>
+              when you walked in<span>.</span>
             </h2>
             <p>
               {PLAN.find((d) => d.id === summary.dayId)?.title} ·{" "}
@@ -2196,12 +2173,6 @@ export default function Home() {
                 <span>KG LIFTED</span>
               </div>
             </div>
-            {summaryProgress && summaryAchievements && <div className="achievement-recap">
-              <div><CheckCheck size={18} /><span><strong>{summaryProgress.exercises}/{summaryProgress.exerciseTotal} movements complete</strong>{summaryProgress.done}/{summaryProgress.total} planned sets · {summaryProgress.targets} rep / hold targets met{summaryProgress.extras > 0 ? ` · ${summaryProgress.extras} extra sets` : ""}</span></div>
-              <div><Trophy size={18} /><span><strong>{summaryAchievements.prs} personal-record set{summaryAchievements.prs === 1 ? "" : "s"}</strong>Weight, reps at the same load, or hold time</span></div>
-              <div><Flame size={18} /><span><strong>{summaryAchievements.weeklyWins} set{summaryAchievements.weeklyWins === 1 ? "" : "s"} beat last week</strong>Compared with matching completed sets</span></div>
-              {summaryProgress.complete && <p>All planned work logged. Take the win, then recover.</p>}
-            </div>}
             <p className="saved-message">
               <CloudCheck size={16} />
               Saved on this device
