@@ -119,7 +119,6 @@ export default function Home() {
     [detail, setDetail] = useState<Session | null>(null),
     [summary, setSummary] = useState<Session | null>(null),
     [finishPrompt, setFinishPrompt] = useState(false),
-    [discardConfirm, setDiscardConfirm] = useState(false),
     [sound, setSound] = useState(true),
     [restEnd, setRestEnd] = useState<number | null>(null),
     [restLength, setRestLength] = useState(90),
@@ -740,10 +739,7 @@ export default function Home() {
               </div>
               <button
                 className="dark-button"
-                onClick={() => (
-                  setDiscardConfirm(false),
-                  setFinishPrompt(true)
-                )}
+                onClick={() => setFinishPrompt(true)}
               >
                 Finish <CheckCheck size={18} />
               </button>
@@ -858,7 +854,6 @@ export default function Home() {
               onReview={() => {
                 if (done === total) finish();
                 else {
-                  setDiscardConfirm(false);
                   setFinishPrompt(true);
                 }
               }}
@@ -1127,9 +1122,7 @@ export default function Home() {
                                           }),
                                       50,
                                     );
-                                  } else
-                                    (setDiscardConfirm(false),
-                                      setFinishPrompt(true));
+                                  } else setFinishPrompt(true);
                                 }}
                               >
                                 {" "}
@@ -1157,10 +1150,7 @@ export default function Home() {
                   </label>
                   <button
                     className="finish-wide dark-button"
-                    onClick={() => (
-                      setDiscardConfirm(false),
-                      setFinishPrompt(true)
-                    )}
+                    onClick={() => setFinishPrompt(true)}
                   >
                     Finish workout <CheckCheck size={18} />
                   </button>
@@ -2082,49 +2072,31 @@ export default function Home() {
             </button>
             {!active.finishedAt && (
               <div className="discard-area">
-                {discardConfirm ? (
-                  <>
-                    <p>This session will be removed from your journal.</p>
-                    <button
-                      className="discard-button"
-                      onClick={() => {
-                        const timestamp = new Date().toISOString();
-                        setSessions((old) =>
-                          old.map((s) =>
-                            s.id === active.id
-                              ? {
-                                  ...s,
-                                  discardedAt: timestamp,
-                                  updatedAt: timestamp,
-                                }
-                              : s,
-                          ),
-                        );
-                        setActiveId(null);
-                        setRestEnd(null);
-                        setFinishPrompt(false);
-                        showNotice(
-                          "Session discarded. Start fresh whenever you’re ready.",
-                        );
-                      }}
-                    >
-                      Yes, discard session
-                    </button>
-                    <button
-                      className="text-button"
-                      onClick={() => setDiscardConfirm(false)}
-                    >
-                      Keep it
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    className="discard-button"
-                    onClick={() => setDiscardConfirm(true)}
-                  >
-                    Discard this session
-                  </button>
-                )}
+                <button
+                  className="discard-button"
+                  onClick={() => {
+                    const timestamp = new Date().toISOString();
+                    setSessions((old) =>
+                      old.map((s) =>
+                        s.id === active.id
+                          ? {
+                              ...s,
+                              discardedAt: timestamp,
+                              updatedAt: timestamp,
+                            }
+                          : s,
+                      ),
+                    );
+                    setActiveId(null);
+                    setRestEnd(null);
+                    setFinishPrompt(false);
+                    showNotice(
+                      "Session discarded. Start fresh whenever you’re ready.",
+                    );
+                  }}
+                >
+                  Discard this session
+                </button>
               </div>
             )}
           </section>
