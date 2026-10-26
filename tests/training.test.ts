@@ -27,6 +27,55 @@ test("all five program days preserve seven exercises and paired movements", () =
     lower.movements.reduce((n, m) => n + m.sets.length, 0),
   );
 });
+test("the app prescription matches the updated V-taper blueprint", () => {
+  const prescriptions = PLAN.flatMap((day) =>
+    day.exercises.map((exercise) => ({
+      day: day.id,
+      id: exercise.id,
+      sets: exercise.sets,
+      reps: `${exercise.min}-${exercise.max}`,
+      rest: exercise.rest,
+    })),
+  );
+
+  assert.deepEqual(prescriptions, [
+    { day: "upper", id: "wide-lat", sets: 4, reps: "10-12", rest: 90 },
+    { day: "upper", id: "incline-db", sets: 4, reps: "10-12", rest: 90 },
+    { day: "upper", id: "supported-row", sets: 3, reps: "10-12", rest: 90 },
+    { day: "upper", id: "behind-lateral", sets: 4, reps: "12-15", rest: 60 },
+    { day: "upper", id: "low-fly", sets: 3, reps: "12-15", rest: 60 },
+    { day: "upper", id: "incline-curl", sets: 3, reps: "12-15", rest: 60 },
+    { day: "upper", id: "overhead-rope", sets: 3, reps: "12-15", rest: 60 },
+    { day: "lower-a", id: "smith-squat", sets: 3, reps: "10-12", rest: 90 },
+    { day: "lower-a", id: "leg-curl", sets: 3, reps: "12-15", rest: 75 },
+    { day: "lower-a", id: "leg-extension", sets: 3, reps: "12-15", rest: 60 },
+    { day: "lower-a", id: "standing-calf", sets: 4, reps: "15-20", rest: 60 },
+    { day: "lower-a", id: "rope-crunch", sets: 4, reps: "12-15", rest: 60 },
+    { day: "lower-a", id: "wrist-reverse", sets: 3, reps: "15-20", rest: 60 },
+    { day: "lower-a", id: "neck-flex", sets: 3, reps: "15-20", rest: 60 },
+    { day: "push", id: "smith-incline", sets: 4, reps: "8-12", rest: 90 },
+    { day: "push", id: "flat-db", sets: 3, reps: "10-12", rest: 90 },
+    { day: "push", id: "high-crossover", sets: 3, reps: "12-15", rest: 60 },
+    { day: "push", id: "shoulder-press", sets: 3, reps: "10-12", rest: 90 },
+    { day: "push", id: "lean-lateral", sets: 4, reps: "12-15", rest: 60 },
+    { day: "push", id: "pushdown", sets: 3, reps: "12-15", rest: 60 },
+    { day: "push", id: "cross-extension", sets: 3, reps: "12-15", rest: 60 },
+    { day: "pull", id: "neutral-lat", sets: 4, reps: "10-12", rest: 90 },
+    { day: "pull", id: "single-row", sets: 3, reps: "10-12", rest: 75 },
+    { day: "pull", id: "pullover", sets: 3, reps: "12-15", rest: 60 },
+    { day: "pull", id: "face-pull", sets: 4, reps: "15-20", rest: 60 },
+    { day: "pull", id: "pump-lateral", sets: 3, reps: "15-20", rest: 60 },
+    { day: "pull", id: "spider-curl", sets: 3, reps: "10-12", rest: 60 },
+    { day: "pull", id: "hammer-wrist", sets: 4, reps: "12-15", rest: 60 },
+    { day: "lower-b", id: "db-rdl", sets: 3, reps: "10-12", rest: 90 },
+    { day: "lower-b", id: "bulgarian", sets: 2, reps: "10-12", rest: 75 },
+    { day: "lower-b", id: "slow-extension", sets: 3, reps: "12-15", rest: 60 },
+    { day: "lower-b", id: "seated-calf", sets: 4, reps: "15-20", rest: 60 },
+    { day: "lower-b", id: "reverse-crunch", sets: 4, reps: "12-15", rest: 60 },
+    { day: "lower-b", id: "vacuum", sets: 4, reps: "30-30", rest: 45 },
+    { day: "lower-b", id: "side-neck", sets: 3, reps: "15-20", rest: 60 },
+  ]);
+});
 test("progression requires the same weight and all prescribed sets at the top range", () => {
   const ex = PLAN[0].exercises[0];
   const m = makeSession(PLAN[0], [], "id", now).movements[0];
