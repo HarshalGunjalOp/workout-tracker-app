@@ -6,8 +6,9 @@ A personal, phone-first workout journal for Harshal’s five-day V-taper program
 
 - All five prescribed training days, every exercise, rep range, rest interval and form cue.
 - Paired exercises have separate logs. Vacuum holds use seconds.
-- One-tap set completion, automatic rest timer, optional sound/haptics, screen wake lock where supported.
-- Previous set numbers, copy-first-set shortcuts, exercise/session notes, resumable sessions.
+- Focused next-set logging with a thumb-reachable Log button on phones. Weight/reps start from completed history (or prescribed reps), and changes carry into the remaining unfinished sets of that movement.
+- Tap +/- or a rep shortcut instead of typing, with configurable weight increments and a bodyweight shortcut. One-tap undo, automatic next exercise and rest timer, optional sound/haptics, and screen wake lock where supported.
+- Full set log for individual corrections, exercise/session notes, resumable sessions. “Do this later” keeps unfinished work in the workout; the finish review offers a specific next set or an honest partial save.
 - Double progression prompts after all prescribed sets reach the top range at the same weight.
 - Actual workout history, strongest logged sets, weekly consistency, JSON export/import.
 - Device autosave, offline app shell after first load, retrying cloud sync and installable home-screen app.

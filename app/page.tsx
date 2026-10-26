@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -33,11 +33,16 @@ import {
   Activity,
   Volume2,
   VolumeX,
+  Trophy,
 } from "lucide-react";
 import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
 import { sessionSchema } from "@/lib/schema";
+import { SetLogger } from "./components/set-logger";
+import { SetCelebration, WorkoutMission } from "./components/workout-motivation";
+import { buildReward, lastWeekSet, planProgress, sessionAchievements, type SetReward } from "@/lib/motivation";
 import {
   makeSession,
+  editSet,
   previousMovement,
   completedSets,
   volume,
@@ -126,6 +131,13 @@ export default function Home() {
     [warmup, setWarmup] = useState(false),
     [saveError, setSaveError] = useState(false),
     [syncTick, setSyncTick] = useState(0);
+  const [lastLogged, setLastLogged] = useState<{
+    sessionId: string;
+    mi: number;
+    si: number;
+  } | null>(null);
+  const lastLogTime = useRef(0);
+  const [reward, setReward] = useState<SetReward | null>(null);
   const synced = useRef<Record<string, string>>({}),
     current = useRef(sessions),
     fileRef = useRef<HTMLInputElement>(null),
@@ -163,8 +175,20 @@ export default function Home() {
     }
     setSelected(nextDay());
     setLoaded(true);
-    if ("serviceWorker" in navigator)
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) {
+      if (process.env.NODE_ENV === "production")
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      else
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) => {
+            registrations.forEach((registration) => {
+              if (registration.active?.scriptURL === `${location.origin}/sw.js`)
+                registration.unregister();
+            });
+          })
+          .catch(() => {});
+    }
   }, []);
   useEffect(() => {
     if (!loaded) return;
@@ -393,6 +417,8 @@ export default function Home() {
     );
   }
   function start(d: Day) {
+    setNow(Date.now());
+    setReward(null);
     if (activeId) {
       showNotice("Finish or resume your current workout first.");
       return;
@@ -400,7 +426,10 @@ export default function Home() {
     const draft = sessions.find((s) => !s.finishedAt && !s.discardedAt);
     if (draft) {
       setActiveId(draft.id);
-      setExpanded(draft.movements[0].exerciseId);
+      setExpanded(
+        draft.movements.find((m) => m.sets.some((s) => !s.done))?.exerciseId ??
+          null,
+      );
       return;
     }
     const s = makeSession(
@@ -428,22 +457,30 @@ export default function Home() {
     si: number,
     field: "weight" | "reps",
     value: string,
+    carryForward = false,
   ) {
     if (!/^\d*(\.\d*)?$/.test(value) || value.length > 8) return;
     if (field === "reps" && (!/^\d*$/.test(value) || value.length > 5)) return;
-    update((s) => ({
-      ...s,
-      movements: s.movements.map((m, i) =>
-        i === mi
-          ? {
-              ...m,
-              sets: m.sets.map((a, j) =>
-                j === si ? { ...a, [field]: value, done: false } : a,
-              ),
-            }
-          : m,
-      ),
-    }));
+    if (active?.movements[mi]?.sets[si]?.done) setReward(null);
+    update((s) => editSet(s, mi, si, field, value, carryForward));
+  }
+  function celebrate(big: boolean, pr: boolean) {
+    navigator.vibrate?.(pr ? [40, 60, 40, 60, 100] : big ? [40, 60, 70] : 30);
+    if (!sound || !audioRef.current || !big) return;
+    try {
+      const ctx = audioRef.current;
+      ctx.resume().catch(() => {});
+      (pr ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99]).forEach((frequency, i) => {
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        const at = ctx.currentTime + i * 0.11;
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.065, at);
+        gain.gain.exponentialRampToValueAtTime(0.001, at + 0.25);
+        osc.start(at); osc.stop(at + 0.26);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      });
+    } catch {}
   }
   function toggleSet(mi: number, si: number, ex: Exercise) {
     const set = active!.movements[mi].sets[si];
@@ -469,21 +506,24 @@ export default function Home() {
       ),
     }));
     if (!set.done) {
-      navigator.vibrate?.(30);
+      setNow(Date.now());
+      setLastLogged({ sessionId: active!.id, mi, si });
       setRestLength(ex.rest);
-      setRestEnd(Date.now() + ex.rest * 1000);
-      const prev = previousMovement(
-        history,
-        active!.movements[mi].exerciseId,
-        active!.id,
-      )?.sets[si];
-      if (
-        prev?.done &&
-        Number(set.weight) * Number(set.reps) >
-          Number(prev.weight) * Number(prev.reps)
-      )
-        showNotice("More work than last time. Progress earned.");
-    }
+      const hasRemaining = active!.movements.some((m, i) =>
+        m.sets.some((s, j) => !s.done && !(i === mi && j === si)),
+      );
+      setRestEnd(hasRemaining ? Date.now() + ex.rest * 1000 : null);
+      const nextSession = { ...active!, movements: active!.movements.map((m, i) => i === mi ? { ...m, sets: m.sets.map((s, j) => j === si ? { ...s, done: true } : s) } : m) };
+      const nextReward = buildReward(history, nextSession, day, mi, si, ex);
+      setReward(nextReward);
+      requestAnimationFrame(() => {
+        const card = document.querySelector(".set-reward");
+        if (card && (card.getBoundingClientRect().top < 75 || card.getBoundingClientRect().top > window.innerHeight / 2))
+          card.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+      });
+      const pr = nextReward.achievement.records.length > 0;
+      celebrate(pr || !!nextReward.achievement.weeklyWin || nextReward.exerciseComplete || nextReward.allDone, pr);
+    } else { setReward(null); setRestEnd(null); }
   }
   function finish() {
     if (!active || !completedSets(active)) {
@@ -545,6 +585,31 @@ export default function Home() {
     total = active
       ? active.movements.reduce((n, m) => n + m.sets.length, 0)
       : 0;
+  const selectedMi =
+    active?.movements.findIndex(
+      (m) => m.exerciseId === expanded && m.sets.some((s) => !s.done),
+    ) ?? -1;
+  const focusMi =
+    selectedMi >= 0
+      ? selectedMi
+      : (active?.movements.findIndex((m) => m.sets.some((s) => !s.done)) ?? -1);
+  const focusMovement = active?.movements[focusMi];
+  const focusEx = day.exercises.find(
+    (e) =>
+      focusMovement?.exerciseId === e.id ||
+      focusMovement?.exerciseId.startsWith(e.id + "-"),
+  );
+  const focusSi = focusMovement?.sets.findIndex((s) => !s.done) ?? -1;
+  const canUndo = !!(
+    active &&
+    lastLogged?.sessionId === active.id &&
+    active.movements[lastLogged.mi]?.sets[lastLogged.si]?.done
+  );
+  const achievements = useMemo(() => active ? sessionAchievements(sessions, active, day) : null, [sessions, active, day]);
+  const progress = active ? planProgress(active, day) : null;
+  const summaryDay = PLAN.find((d) => d.id === summary?.dayId);
+  const summaryProgress = summary && summaryDay ? planProgress(summary, summaryDay) : null;
+  const summaryAchievements = useMemo(() => summary && summaryDay ? sessionAchievements(sessions, summary, summaryDay) : null, [sessions, summary, summaryDay]);
   const nav = [
     { id: "today" as Tab, label: "Today", icon: LayoutGrid },
     { id: "program" as Tab, label: "Your program", icon: Dumbbell },
@@ -671,7 +736,6 @@ export default function Home() {
                 className="text-button"
                 onClick={() => {
                   setActiveId(null);
-                  setRestEnd(null);
                 }}
               >
                 <ChevronLeft size={17} /> Back to overview
@@ -710,396 +774,497 @@ export default function Home() {
                 Finish <CheckCheck size={18} />
               </button>
             </div>
-            <div className="workout-progress">
-              <div className="progress-meta">
-                <strong>
-                  {done}
-                  <span> / {total} sets</span>
-                </strong>
-                <span>{fmt(volume(active))} kg lifted</span>
-              </div>
-              <div className="progress-track">
-                <i style={{ width: `${(done / total) * 100}%` }} />
-              </div>
-            </div>
-            <button
-              className={"warmup " + (warmup ? "warmup-done" : "")}
-              onClick={() => setWarmup((v) => !v)}
+            {achievements && <WorkoutMission session={active} day={day} focusMi={focusMi} prs={achievements.prs} weeklyWins={achievements.weeklyWins} onSelect={(id) => {
+              setExpanded(id);
+              if (active.movements.find((m) => m.exerciseId === id)?.sets.every((s) => s.done)) showNotice("All sets for that movement are logged. Open Workout overview & edits to review them.");
+            }} />}
+            <details
+              className={
+                "workout-warmup " + (done > 0 ? "workout-warmup-started" : "")
+              }
             >
-              <span className="warmup-check">
-                {warmup ? <Check size={15} /> : <Flame size={17} />}
-              </span>
-              <span>
-                <strong>Get warm. Move well.</strong>
-                <small>{day.warmup}</small>
-              </span>
-              <span className="warmup-time">5 MIN</span>
-            </button>
-            <div className="session-layout">
-              <div className="exercise-stack">
-                {active.movements.map((m, mi) => {
-                  const ex = day.exercises.find(
-                    (e) =>
-                      m.exerciseId === e.id ||
-                      m.exerciseId.startsWith(e.id + "-"),
-                  )!;
-                  const previous = previousMovement(
+              <summary>
+                <Flame size={16} /> Warm-up{" "}
+                <span>{warmup ? "Done" : "5 min · tap to view"}</span>
+              </summary>
+              <button
+                className={"warmup " + (warmup ? "warmup-done" : "")}
+                onClick={() => setWarmup((v) => !v)}
+              >
+                <span className="warmup-check">
+                  {warmup ? <Check size={15} /> : <Flame size={17} />}
+                </span>
+                <span>
+                  <strong>Get warm. Move well.</strong>
+                  <small>{day.warmup}</small>
+                </span>
+                <span className="warmup-time">5 MIN</span>
+              </button>
+            </details>
+            <SetCelebration reward={reward?.sessionId === active.id && active.movements[reward.mi]?.sets[reward.si]?.done ? reward : null} />
+            <SetLogger
+              session={active}
+              mi={focusMi}
+              ex={focusEx}
+              previous={
+                focusMovement
+                  ? previousMovement(
                       history,
-                      m.exerciseId,
+                      focusMovement.exerciseId,
                       active.id,
-                    ),
-                    complete = m.sets.every((s) => s.done),
-                    open = expanded === m.exerciseId;
-                  const ready = previous && canProgress(previous, ex);
-                  return (
-                    <section
-                      className={
-                        "exercise-card " +
-                        (open ? "expanded" : "") +
-                        (complete ? " exercise-done" : "")
-                      }
-                      key={m.exerciseId}
-                    >
-                      <button
-                        className="exercise-header"
-                        onClick={() => setExpanded(open ? null : m.exerciseId)}
+                    )
+                  : undefined
+              }
+              weeklyBaseline={focusMovement && focusEx ? lastWeekSet(history, active, focusMovement.exerciseId, focusSi, focusEx.timed) : undefined}
+              seconds={seconds}
+              resting={restEnd !== null}
+              canUndo={canUndo}
+              onChange={(field, value) =>
+                setValue(focusMi, focusSi, field, value, true)
+              }
+              onLog={() => {
+                if (!focusEx || Date.now() - lastLogTime.current < 600) return;
+                lastLogTime.current = Date.now();
+                toggleSet(focusMi, focusSi, focusEx);
+                const next = active.movements[focusMi].sets.some(
+                  (s, i) => !s.done && i !== focusSi,
+                )
+                  ? active.movements[focusMi]
+                  : (active.movements.find(
+                      (m, i) => i > focusMi && m.sets.some((s) => !s.done),
+                    ) ??
+                    active.movements.find(
+                      (m, i) => i !== focusMi && m.sets.some((s) => !s.done),
+                    ));
+                setExpanded(next?.exerciseId ?? null);
+              }}
+              onUndo={() => {
+                if (!lastLogged || !canUndo) return;
+                update((s) => ({
+                  ...s,
+                  movements: s.movements.map((m, i) =>
+                    i === lastLogged.mi
+                      ? {
+                          ...m,
+                          sets: m.sets.map((set, j) =>
+                            j === lastLogged.si ? { ...set, done: false } : set,
+                          ),
+                        }
+                      : m,
+                  ),
+                }));
+                setExpanded(active.movements[lastLogged.mi].exerciseId);
+                setRestEnd(null);
+                setLastLogged(null);
+                setReward(null);
+                showNotice("Last set undone. Adjust it and log again.");
+              }}
+              onLater={() => {
+                const next =
+                  active.movements.find(
+                    (m, i) => i > focusMi && m.sets.some((s) => !s.done),
+                  ) ??
+                  active.movements.find(
+                    (m, i) => i !== focusMi && m.sets.some((s) => !s.done),
+                  );
+                if (next) setExpanded(next.exerciseId);
+                showNotice(
+                  "We’ll return to your unfinished sets before you finish.",
+                );
+              }}
+              onRestMore={() =>
+                setRestEnd((end) => Math.max(end ?? 0, Date.now()) + 15000)
+              }
+              onRestSkip={() => setRestEnd(null)}
+              onReview={() => {
+                if (done === total) finish();
+                else {
+                  setDiscardConfirm(false);
+                  setFinishPrompt(true);
+                }
+              }}
+            />
+            <details className="workout-details">
+              <summary>
+                <LayoutGrid size={18} /> Workout overview & edits{" "}
+                <span>
+                  {done}/{total} sets
+                </span>
+              </summary>
+              <div className="session-layout">
+                <div className="exercise-stack">
+                  {active.movements.map((m, mi) => {
+                    const ex = day.exercises.find(
+                      (e) =>
+                        m.exerciseId === e.id ||
+                        m.exerciseId.startsWith(e.id + "-"),
+                    )!;
+                    const previous = previousMovement(
+                        history,
+                        m.exerciseId,
+                        active.id,
+                      ),
+                      complete = m.sets.every((s) => s.done),
+                      open = expanded === m.exerciseId;
+                    const ready = previous && canProgress(previous, ex);
+                    return (
+                      <section
+                        className={
+                          "exercise-card " +
+                          (open ? "expanded" : "") +
+                          (complete ? " exercise-done" : "")
+                        }
+                        key={m.exerciseId}
                       >
-                        <span
-                          className={
-                            "exercise-number " + (complete ? "is-done" : "")
+                        <button
+                          className="exercise-header"
+                          onClick={() =>
+                            setExpanded(open ? null : m.exerciseId)
                           }
                         >
-                          {complete ? (
-                            <Check size={18} />
-                          ) : (
-                            String(mi + 1).padStart(2, "0")
-                          )}
-                        </span>
-                        <span className="exercise-title">
-                          <strong>{m.name}</strong>
-                          <small>
-                            {ex.muscle} <span>·</span>{" "}
-                            {ex.min === ex.max ? ex.min : `${ex.min}–${ex.max}`}{" "}
-                            {ex.timed ? "sec" : "reps"} <span>·</span> {ex.rest}
-                            s rest
-                          </small>
-                        </span>
-                        <span className="exercise-count">
-                          {m.sets.filter((s) => s.done).length}/{m.sets.length}
-                        </span>
-                        <ChevronRight
-                          size={17}
-                          className={open ? "rotated" : ""}
-                        />
-                      </button>
-                      {open && (
-                        <div className="exercise-body">
-                          <div className="form-cue">
-                            <Info size={15} />
-                            <span>{ex.cue}</span>
-                          </div>
-                          {previous?.note && (
-                            <div className="form-cue previous-note">
-                              <NotebookPen size={15} />
-                              <span>Last time: {previous.note}</span>
+                          <span
+                            className={
+                              "exercise-number " + (complete ? "is-done" : "")
+                            }
+                          >
+                            {complete ? (
+                              <Check size={18} />
+                            ) : (
+                              String(mi + 1).padStart(2, "0")
+                            )}
+                          </span>
+                          <span className="exercise-title">
+                            <strong>{m.name}</strong>
+                            <small>
+                              {ex.muscle} <span>·</span>{" "}
+                              {ex.min === ex.max
+                                ? ex.min
+                                : `${ex.min}–${ex.max}`}{" "}
+                              {ex.timed ? "sec" : "reps"} <span>·</span>{" "}
+                              {ex.rest}s rest
+                            </small>
+                          </span>
+                          <span className="exercise-count">
+                            {m.sets.filter((s) => s.done).length}/
+                            {m.sets.length}
+                          </span>
+                          <ChevronRight
+                            size={17}
+                            className={open ? "rotated" : ""}
+                          />
+                        </button>
+                        {open && (
+                          <div className="exercise-body">
+                            <div className="form-cue">
+                              <Info size={15} />
+                              <span>{ex.cue}</span>
                             </div>
-                          )}
-                          {ready && (
-                            <div className="progression-cue">
-                              <TrendingUp size={16} />
-                              <span>
-                                You earned a weight increase. Try the smallest
-                                available increment.
-                              </span>
-                            </div>
-                          )}
-                          <div className="set-table">
-                            <div className="set-table-header">
-                              <span>SET</span>
-                              <span>LAST TIME</span>
-                              <span>{ex.timed ? "LOAD" : "KG"}</span>
-                              <span>{ex.timed ? "SECONDS" : "REPS"}</span>
-                              <span>LOG</span>
-                            </div>
-                            {m.sets.map((s, si) => (
-                              <div
-                                className={
-                                  "set-row " + (s.done ? "logged" : "")
-                                }
-                                key={si}
-                              >
-                                <span className="set-index">{si + 1}</span>
-                                <span className="previous-set">
-                                  {previous?.sets[si]?.done
-                                    ? `${previous.sets[si].weight || "BW"} × ${previous.sets[si].reps}`
-                                    : "—"}
-                                </span>
-                                <input
-                                  aria-label={`${m.name} set ${si + 1} weight`}
-                                  inputMode="decimal"
-                                  type="text"
-                                  value={s.weight}
-                                  maxLength={8}
-                                  placeholder={ex.timed ? "—" : "0"}
-                                  disabled={!!ex.timed}
-                                  onFocus={(e) => e.target.select()}
-                                  onChange={(e) =>
-                                    setValue(mi, si, "weight", e.target.value)
-                                  }
-                                />
-                                <input
-                                  aria-label={`${m.name} set ${si + 1} ${ex.timed ? "seconds" : "reps"}`}
-                                  inputMode="numeric"
-                                  type="text"
-                                  value={s.reps}
-                                  maxLength={5}
-                                  onFocus={(e) => e.target.select()}
-                                  onChange={(e) =>
-                                    setValue(mi, si, "reps", e.target.value)
-                                  }
-                                />
-                                <button
-                                  className="log-button"
-                                  aria-label={`${s.done ? "Undo" : "Complete"} ${m.name} set ${si + 1}`}
-                                  aria-pressed={s.done}
-                                  onClick={() => toggleSet(mi, si, ex)}
-                                >
-                                  <Check size={20} />
-                                </button>
+                            {previous?.note && (
+                              <div className="form-cue previous-note">
+                                <NotebookPen size={15} />
+                                <span>Last time: {previous.note}</span>
                               </div>
-                            ))}
-                          </div>
-                          <div className="exercise-tools">
-                            <button
-                              onClick={() =>
-                                update((s) => ({
-                                  ...s,
-                                  movements: s.movements.map((x, i) =>
-                                    i === mi
-                                      ? {
-                                          ...x,
-                                          sets: [
-                                            ...x.sets,
-                                            { ...x.sets.at(-1)!, done: false },
-                                          ],
-                                        }
-                                      : x,
-                                  ),
-                                }))
-                              }
-                              disabled={m.sets.length >= 20}
-                            >
-                              <Plus size={15} /> Add set
-                            </button>
-                            <button
-                              onClick={() => {
-                                const first = m.sets[0];
-                                if (!first.weight && !ex.timed) {
-                                  showNotice(
-                                    "Enter your first set’s weight, then copy it to the rest.",
-                                  );
-                                  return;
-                                }
-                                update((s) => ({
-                                  ...s,
-                                  movements: s.movements.map((x, i) =>
-                                    i === mi
-                                      ? {
-                                          ...x,
-                                          sets: x.sets.map((a) =>
-                                            a.done
-                                              ? a
-                                              : {
-                                                  ...a,
-                                                  weight: first.weight,
-                                                  reps: first.reps,
-                                                },
-                                          ),
-                                        }
-                                      : x,
-                                  ),
-                                }));
-                                showNotice(
-                                  "First set copied to unfinished sets.",
-                                );
-                              }}
-                            >
-                              <CheckCheck size={15} /> Fill from first set
-                            </button>
-                            {m.sets.length > ex.sets && (
+                            )}
+                            {ready && (
+                              <div className="progression-cue">
+                                <TrendingUp size={16} />
+                                <span>
+                                  You earned a weight increase. Try the smallest
+                                  available increment.
+                                </span>
+                              </div>
+                            )}
+                            <div className="set-table">
+                              <div className="set-table-header">
+                                <span>SET</span>
+                                <span>LAST TIME</span>
+                                <span>{ex.timed ? "LOAD" : "KG"}</span>
+                                <span>{ex.timed ? "SECONDS" : "REPS"}</span>
+                                <span>LOG</span>
+                              </div>
+                              {m.sets.map((s, si) => (
+                                <div
+                                  className={
+                                    "set-row " + (s.done ? "logged" : "")
+                                  }
+                                  key={si}
+                                >
+                                  <span className="set-index">{si + 1}{achievements?.badges[`${mi}:${si}`]?.records.length ? <Trophy size={12} className="set-pr-badge" aria-label="Personal record" /> : achievements?.badges[`${mi}:${si}`]?.weeklyWin ? <Flame size={12} className="set-pr-badge" aria-label="Beat last week" /> : null}</span>
+                                  <span className="previous-set">
+                                    {previous?.sets[si]?.done
+                                      ? `${previous.sets[si].weight || "BW"} × ${previous.sets[si].reps}`
+                                      : "—"}
+                                  </span>
+                                  <input
+                                    aria-label={`${m.name} set ${si + 1} weight`}
+                                    inputMode="decimal"
+                                    type="text"
+                                    value={s.weight}
+                                    maxLength={8}
+                                    placeholder={ex.timed ? "—" : "0"}
+                                    disabled={!!ex.timed}
+                                    onFocus={(e) => e.target.select()}
+                                    onChange={(e) =>
+                                      setValue(mi, si, "weight", e.target.value)
+                                    }
+                                  />
+                                  <input
+                                    aria-label={`${m.name} set ${si + 1} ${ex.timed ? "seconds" : "reps"}`}
+                                    inputMode="numeric"
+                                    type="text"
+                                    value={s.reps}
+                                    maxLength={5}
+                                    onFocus={(e) => e.target.select()}
+                                    onChange={(e) =>
+                                      setValue(mi, si, "reps", e.target.value)
+                                    }
+                                  />
+                                  <button
+                                    className="log-button"
+                                    aria-label={`${s.done ? "Undo" : "Complete"} ${m.name} set ${si + 1}`}
+                                    aria-pressed={s.done}
+                                    onClick={() => toggleSet(mi, si, ex)}
+                                  >
+                                    <Check size={20} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="exercise-tools">
                               <button
-                                aria-label="Remove extra set"
                                 onClick={() =>
                                   update((s) => ({
                                     ...s,
                                     movements: s.movements.map((x, i) =>
                                       i === mi
-                                        ? { ...x, sets: x.sets.slice(0, -1) }
+                                        ? {
+                                            ...x,
+                                            sets: [
+                                              ...x.sets,
+                                              {
+                                                ...x.sets.at(-1)!,
+                                                done: false,
+                                              },
+                                            ],
+                                          }
                                         : x,
                                     ),
                                   }))
                                 }
+                                disabled={m.sets.length >= 20}
                               >
-                                <Minus size={15} />
+                                <Plus size={15} /> Add set
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const first = m.sets[0];
+                                  if (!first.weight && !ex.timed) {
+                                    showNotice(
+                                      "Enter your first set’s weight, then copy it to the rest.",
+                                    );
+                                    return;
+                                  }
+                                  update((s) => ({
+                                    ...s,
+                                    movements: s.movements.map((x, i) =>
+                                      i === mi
+                                        ? {
+                                            ...x,
+                                            sets: x.sets.map((a) =>
+                                              a.done
+                                                ? a
+                                                : {
+                                                    ...a,
+                                                    weight: first.weight,
+                                                    reps: first.reps,
+                                                  },
+                                            ),
+                                          }
+                                        : x,
+                                    ),
+                                  }));
+                                  showNotice(
+                                    "First set copied to unfinished sets.",
+                                  );
+                                }}
+                              >
+                                <CheckCheck size={15} /> Fill from first set
+                              </button>
+                              {m.sets.length > ex.sets && (
+                                <button
+                                  aria-label="Remove extra set"
+                                  onClick={() =>
+                                    update((s) => ({
+                                      ...s,
+                                      movements: s.movements.map((x, i) =>
+                                        i === mi
+                                          ? { ...x, sets: x.sets.slice(0, -1) }
+                                          : x,
+                                      ),
+                                    }))
+                                  }
+                                >
+                                  <Minus size={15} />
+                                </button>
+                              )}
+                            </div>
+                            <label className="note-field">
+                              <NotebookPen size={16} />
+                              <input
+                                value={m.note}
+                                maxLength={1000}
+                                placeholder="A note for next time…"
+                                onChange={(e) =>
+                                  update((s) => ({
+                                    ...s,
+                                    movements: s.movements.map((x, i) =>
+                                      i === mi
+                                        ? { ...x, note: e.target.value }
+                                        : x,
+                                    ),
+                                  }))
+                                }
+                              />
+                            </label>
+                            {complete && (
+                              <button
+                                className="next-exercise"
+                                onClick={() => {
+                                  const next = active.movements.find(
+                                    (x, i) =>
+                                      i > mi && !x.sets.every((s) => s.done),
+                                  );
+                                  if (next) {
+                                    setExpanded(next.exerciseId);
+                                    setTimeout(
+                                      () =>
+                                        document
+                                          .querySelector(
+                                            ".exercise-card.expanded",
+                                          )
+                                          ?.scrollIntoView({
+                                            behavior: "smooth",
+                                            block: "center",
+                                          }),
+                                      50,
+                                    );
+                                  } else
+                                    (setDiscardConfirm(false),
+                                      setFinishPrompt(true));
+                                }}
+                              >
+                                {" "}
+                                {mi < active.movements.length - 1
+                                  ? "Next exercise"
+                                  : "Review workout"}
+                                <ArrowRight size={16} />
                               </button>
                             )}
                           </div>
-                          <label className="note-field">
-                            <NotebookPen size={16} />
-                            <input
-                              value={m.note}
-                              maxLength={1000}
-                              placeholder="A note for next time…"
-                              onChange={(e) =>
-                                update((s) => ({
-                                  ...s,
-                                  movements: s.movements.map((x, i) =>
-                                    i === mi
-                                      ? { ...x, note: e.target.value }
-                                      : x,
-                                  ),
-                                }))
-                              }
-                            />
-                          </label>
-                          {complete && (
-                            <button
-                              className="next-exercise"
-                              onClick={() => {
-                                const next = active.movements.find(
-                                  (x, i) =>
-                                    i > mi && !x.sets.every((s) => s.done),
-                                );
-                                if (next) {
-                                  setExpanded(next.exerciseId);
-                                  setTimeout(
-                                    () =>
-                                      document
-                                        .querySelector(
-                                          ".exercise-card.expanded",
-                                        )
-                                        ?.scrollIntoView({
-                                          behavior: "smooth",
-                                          block: "center",
-                                        }),
-                                    50,
-                                  );
-                                } else
-                                  (setDiscardConfirm(false),
-                                    setFinishPrompt(true));
-                              }}
-                            >
-                              {" "}
-                              {mi < active.movements.length - 1
-                                ? "Next exercise"
-                                : "Review workout"}
-                              <ArrowRight size={16} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
-                <label className="session-note">
-                  <span>SESSION NOTES</span>
-                  <textarea
-                    value={active.note}
-                    maxLength={2000}
-                    placeholder="How did it feel? Anything to remember?"
-                    onChange={(e) =>
-                      update((s) => ({ ...s, note: e.target.value }))
-                    }
-                  />
-                </label>
-                <button
-                  className="finish-wide dark-button"
-                  onClick={() => (
-                    setDiscardConfirm(false),
-                    setFinishPrompt(true)
-                  )}
-                >
-                  Finish workout <CheckCheck size={18} />
-                </button>
-              </div>
-              <aside className="session-side">
-                <div className="rest-card">
-                  <div className="section-overline">
-                    <Timer size={16} /> REST TIMER
-                    <button
-                      className="icon-button"
-                      onClick={() => {
-                        initAudio();
-                        setSound((v) => !v);
-                      }}
-                      aria-label={sound ? "Mute timer" : "Unmute timer"}
-                    >
-                      {sound ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                    </button>
-                  </div>
-                  <div
-                    className={
-                      "timer-circle " +
-                      (seconds === 0 && restEnd ? "timer-ready" : "")
-                    }
-                    style={
-                      {
-                        "--timer-progress": `${Math.min(100, (seconds / restLength) * 100)}%`,
-                      } as React.CSSProperties
-                    }
+                        )}
+                      </section>
+                    );
+                  })}
+                  <label className="session-note">
+                    <span>SESSION NOTES</span>
+                    <textarea
+                      value={active.note}
+                      maxLength={2000}
+                      placeholder="How did it feel? Anything to remember?"
+                      onChange={(e) =>
+                        update((s) => ({ ...s, note: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <button
+                    className="finish-wide dark-button"
+                    onClick={() => (
+                      setDiscardConfirm(false),
+                      setFinishPrompt(true)
+                    )}
                   >
-                    <strong>
-                      {restEnd ? clock(seconds) : clock(restLength)}
-                    </strong>
-                    <span>
-                      {restEnd
-                        ? seconds
-                          ? "BREATHE & RESET"
-                          : "READY WHEN YOU ARE"
-                        : "STARTS AFTER EACH SET"}
-                    </span>
-                  </div>
-                  <div className="timer-controls">
-                    <button
-                      onClick={() =>
-                        setRestEnd((end) => (end ?? Date.now()) + 15000)
+                    Finish workout <CheckCheck size={18} />
+                  </button>
+                </div>
+                <aside className="session-side">
+                  <div className="rest-card">
+                    <div className="section-overline">
+                      <Timer size={16} /> REST TIMER
+                      <button
+                        className="icon-button"
+                        onClick={() => {
+                          initAudio();
+                          setSound((v) => !v);
+                        }}
+                        aria-label={sound ? "Mute timer" : "Unmute timer"}
+                      >
+                        {sound ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                      </button>
+                    </div>
+                    <div
+                      className={
+                        "timer-circle " +
+                        (seconds === 0 && restEnd ? "timer-ready" : "")
+                      }
+                      style={
+                        {
+                          "--timer-progress": `${Math.min(100, (seconds / restLength) * 100)}%`,
+                        } as React.CSSProperties
                       }
                     >
-                      +15s
-                    </button>
-                    <button
-                      className="timer-main"
-                      onClick={() => {
-                        initAudio();
-                        if (restEnd) setRestEnd(null);
-                        else setRestEnd(Date.now() + restLength * 1000);
-                      }}
-                      aria-label={restEnd ? "Reset timer" : "Start timer"}
-                    >
-                      {restEnd ? <RotateCcw size={20} /> : <Play size={20} />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setRestEnd(null);
-                        showNotice("Rest skipped. Listen to your body.");
-                      }}
-                    >
-                      Skip <ChevronRight size={13} />
-                    </button>
+                      <strong>
+                        {restEnd ? clock(seconds) : clock(restLength)}
+                      </strong>
+                      <span>
+                        {restEnd
+                          ? seconds
+                            ? "BREATHE & RESET"
+                            : "READY WHEN YOU ARE"
+                          : "STARTS AFTER EACH SET"}
+                      </span>
+                    </div>
+                    <div className="timer-controls">
+                      <button
+                        onClick={() =>
+                          setRestEnd((end) => (end ?? Date.now()) + 15000)
+                        }
+                      >
+                        +15s
+                      </button>
+                      <button
+                        className="timer-main"
+                        onClick={() => {
+                          initAudio();
+                          if (restEnd) setRestEnd(null);
+                          else setRestEnd(Date.now() + restLength * 1000);
+                        }}
+                        aria-label={restEnd ? "Reset timer" : "Start timer"}
+                      >
+                        {restEnd ? <RotateCcw size={20} /> : <Play size={20} />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setRestEnd(null);
+                          showNotice("Rest skipped. Listen to your body.");
+                        }}
+                      >
+                        Skip <ChevronRight size={13} />
+                      </button>
+                    </div>
+                    <p>Rest is part of the work.</p>
                   </div>
-                  <p>Rest is part of the work.</p>
-                </div>
-                <div className="training-rule">
-                  <Target size={19} />
-                  <h4>Clean reps. Real progress.</h4>
-                  <p>
-                    Leave 1–2 reps in reserve. Reach {day.exercises[0].max} reps
-                    across every set before adding weight.
-                  </p>
-                  <span>CONTROL THE LOWERING · NO MOMENTUM</span>
-                </div>
-              </aside>
-            </div>
+                  <div className="training-rule">
+                    <Target size={19} />
+                    <h4>Clean reps. Real progress.</h4>
+                    <p>
+                      Leave 1–2 reps in reserve. Reach {day.exercises[0].max}{" "}
+                      reps across every set before adding weight.
+                    </p>
+                    <span>CONTROL THE LOWERING · NO MOMENTUM</span>
+                  </div>
+                </aside>
+              </div>
+            </details>
           </main>
         ) : (
           <main className="content">
@@ -1736,19 +1901,6 @@ export default function Home() {
           </button>
         ))}
       </nav>
-      {active && restEnd && (
-        <div className={"mobile-rest " + (!seconds ? "rest-complete" : "")}>
-          <Timer size={20} />
-          <div>
-            <strong>{seconds ? clock(seconds) : "Ready"}</strong>
-            <span>{seconds ? "REST TIMER" : "NEXT SET"}</span>
-          </div>
-          <button onClick={() => setRestEnd(restEnd + 15000)}>+15s</button>
-          <button onClick={() => setRestEnd(null)}>
-            Skip <ArrowRight size={16} />
-          </button>
-        </div>
-      )}
       {notice && (
         <div className="toast" role="status">
           <Check size={18} />
@@ -1897,15 +2049,17 @@ export default function Home() {
             >
               <X size={20} />
             </button>
-            <div className="eyebrow">MAKE IT COUNT</div>
+            <div className="eyebrow">WORKOUT REVIEW</div>
             <h2>
               That’s your work<span>.</span>
             </h2>
             <p>
               {done === total
-                ? "Every planned set, checked off. Ready to save it?"
-                : `${done} of ${total} sets logged. You can finish with what you’ve done, or keep going.`}
+                ? "Every set, checked off. Ready to save it?"
+                : `${total - done} sets left across ${active.movements.filter((m) => m.sets.some((s) => !s.done)).length} exercises. Next: ${focusMovement?.name ?? "your remaining sets"}.`}
             </p>
+            {progress && <p className="review-targets">{progress.done}/{progress.total} planned sets · {progress.targets} rep / hold targets met{progress.extras ? ` · ${progress.extras} extra sets` : ""}. {progress.targets < progress.done ? "Adjusted sets count as work, too. Log actual reps; no need to redo them." : ""}</p>}
+            {done < total && <ul className="remaining-movements">{active.movements.filter((m) => m.sets.some((s) => !s.done)).map((m) => <li key={m.exerciseId}><span>{m.name}</span><strong>{m.sets.filter((s) => !s.done).length} left</strong></li>)}</ul>}
             <div className="summary-stats">
               <div>
                 <strong>{done}</strong>
@@ -1920,14 +2074,34 @@ export default function Home() {
                 <span>KG LIFTED</span>
               </div>
             </div>
-            <button className="lime-button" disabled={!done} onClick={finish}>
-              Save workout <Check size={19} />
+            {done < total && (
+              <button
+                className="lime-button"
+                onClick={() => {
+                  setFinishPrompt(false);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                Continue with next set <ArrowRight size={19} />
+              </button>
+            )}
+            <button
+              className={
+                done === total ? "lime-button" : "outline-button finish-partial"
+              }
+              disabled={!done}
+              onClick={finish}
+            >
+              {done === total
+                ? "Save workout"
+                : `Finish & save ${done} logged sets`}{" "}
+              <Check size={19} />
             </button>
             <button
               className="text-button modal-secondary"
               onClick={() => setFinishPrompt(false)}
             >
-              Keep training <ArrowRight size={16} />
+              Back to workout <ArrowRight size={16} />
             </button>
             {!active.finishedAt && (
               <div className="discard-area">
@@ -1998,11 +2172,11 @@ export default function Home() {
             <div className="summary-symbol">
               <CheckCheck size={34} />
             </div>
-            <div className="eyebrow">ANOTHER SESSION IN THE BANK</div>
+            <div className="eyebrow">{summaryProgress?.complete ? "MISSION COMPLETE" : "YOUR WORK IS IN THE BANK"}</div>
             <h2>
-              Stronger than
+              {summaryProgress?.complete ? "Every planned set." : "Your effort counts."}
               <br />
-              when you walked in<span>.</span>
+              {summaryProgress?.complete ? "You brought it home" : "Keep building"}<span>.</span>
             </h2>
             <p>
               {PLAN.find((d) => d.id === summary.dayId)?.title} ·{" "}
@@ -2022,6 +2196,12 @@ export default function Home() {
                 <span>KG LIFTED</span>
               </div>
             </div>
+            {summaryProgress && summaryAchievements && <div className="achievement-recap">
+              <div><CheckCheck size={18} /><span><strong>{summaryProgress.exercises}/{summaryProgress.exerciseTotal} movements complete</strong>{summaryProgress.done}/{summaryProgress.total} planned sets · {summaryProgress.targets} rep / hold targets met{summaryProgress.extras > 0 ? ` · ${summaryProgress.extras} extra sets` : ""}</span></div>
+              <div><Trophy size={18} /><span><strong>{summaryAchievements.prs} personal-record set{summaryAchievements.prs === 1 ? "" : "s"}</strong>Weight, reps at the same load, or hold time</span></div>
+              <div><Flame size={18} /><span><strong>{summaryAchievements.weeklyWins} set{summaryAchievements.weeklyWins === 1 ? "" : "s"} beat last week</strong>Compared with matching completed sets</span></div>
+              {summaryProgress.complete && <p>All planned work logged. Take the win, then recover.</p>}
+            </div>}
             <p className="saved-message">
               <CloudCheck size={16} />
               Saved on this device

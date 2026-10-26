@@ -1,6 +1,8 @@
-const CACHE = "form-v1";
+const CACHE = "form-v2";
+const LOCAL = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+  if (LOCAL) return;
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(["/", "/icon.svg"])),
   );
@@ -22,6 +24,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 self.addEventListener("fetch", (event) => {
+  if (LOCAL) return;
   const url = new URL(event.request.url);
   if (
     url.origin !== location.origin ||

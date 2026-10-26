@@ -9,6 +9,7 @@ import {
   completedSets,
   previousMovement,
   localDate,
+  editSet,
 } from "../lib/training.ts";
 const now = "2026-10-26T10:00:00.000Z";
 test("all five program days preserve seven exercises and paired movements", () => {
@@ -131,4 +132,45 @@ test("discarded sessions never become previous-session targets", () => {
   s.finishedAt = now;
   s.discardedAt = now;
   assert.equal(previousMovement([s], s.movements[0].exerciseId), undefined);
+});
+
+test("targets use completed work, fill missing sets, and skip untouched exercises", () => {
+  const older = makeSession(PLAN[0], [], "older", now);
+  older.finishedAt = now;
+  older.movements[1].sets[0] = { weight: "15", reps: "11", done: true };
+  const recent = makeSession(PLAN[0], [], "recent", "2026-10-27T10:00:00.000Z");
+  recent.finishedAt = recent.startedAt;
+  recent.movements[0].sets[0] = { weight: "35", reps: "12", done: true };
+  recent.movements[0].sets[1] = { weight: "999", reps: "1", done: false };
+  const fresh = makeSession(PLAN[0], [recent, older], "new", now);
+  assert.ok(
+    fresh.movements[0].sets.every(
+      (s) => s.weight === "35" && s.reps === "12" && !s.done,
+    ),
+  );
+  assert.equal(fresh.movements[1].sets[0].weight, "15");
+});
+
+test("focused defaults carry forward without changing completed sets or other exercises", () => {
+  const session = makeSession(PLAN[0], [], "id", now);
+  session.movements[0].sets[0] = { weight: "30", reps: "10", done: true };
+  const weighted = editSet(session, 0, 1, "weight", "32.5", true);
+  const edited = editSet(weighted, 0, 1, "reps", "11", true);
+  assert.deepEqual(edited.movements[0].sets[0], session.movements[0].sets[0]);
+  assert.ok(
+    edited.movements[0].sets
+      .slice(1)
+      .every((s) => s.weight === "32.5" && s.reps === "11" && !s.done),
+  );
+  assert.deepEqual(edited.movements[1], session.movements[1]);
+  assert.equal(session.movements[0].sets[1].weight, "");
+});
+
+test("correcting a completed set retains its completion and other set values", () => {
+  const session = makeSession(PLAN[0], [], "id", now);
+  session.movements[0].sets[0] = { weight: "30", reps: "10", done: true };
+  const edited = editSet(session, 0, 0, "reps", "9");
+  assert.equal(edited.movements[0].sets[0].done, true);
+  assert.equal(edited.movements[0].sets[0].reps, "9");
+  assert.deepEqual(edited.movements[0].sets[1], session.movements[0].sets[1]);
 });

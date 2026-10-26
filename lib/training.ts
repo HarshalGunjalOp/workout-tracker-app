@@ -39,15 +39,21 @@ export function makeSession(
     movements: day.exercises.flatMap((ex) =>
       movementsFor(ex).map((m) => {
         const last = previousMovement(history, m.id);
+        const completed = last?.sets.filter((s) => s.done);
         return {
           exerciseId: m.id,
           name: m.name,
           note: "",
-          sets: Array.from({ length: ex.sets }, (_, i) => ({
-            weight: last?.sets[i]?.weight ?? "",
-            reps: ex.timed ? "30" : (last?.sets[i]?.reps ?? String(ex.min)),
-            done: false,
-          })),
+          sets: Array.from({ length: ex.sets }, (_, i) => {
+            const target = last?.sets[i]?.done
+              ? last.sets[i]
+              : completed?.at(-1);
+            return {
+              weight: ex.timed ? "" : (target?.weight ?? ""),
+              reps: target?.reps || String(ex.min),
+              done: false,
+            };
+          }),
         };
       }),
     ),
@@ -62,7 +68,33 @@ export function previousMovement(
     .filter((s) => s.finishedAt && !s.discardedAt && s.id !== exclude)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     .flatMap((s) => s.movements)
-    .find((m) => m.exerciseId === id);
+    .find((m) => m.exerciseId === id && m.sets.some((s) => s.done));
+}
+// Focused edits become the default for the remaining sets of this movement.
+// Corrections in the full log affect only the selected set and retain completion.
+export function editSet(
+  session: Session,
+  mi: number,
+  si: number,
+  field: "weight" | "reps",
+  value: string,
+  carryForward = false,
+): Session {
+  return {
+    ...session,
+    movements: session.movements.map((m, i) =>
+      i !== mi
+        ? m
+        : {
+            ...m,
+            sets: m.sets.map((set, j) =>
+              j === si || (carryForward && j > si && !set.done)
+                ? { ...set, [field]: value }
+                : set,
+            ),
+          },
+    ),
+  };
 }
 export function canProgress(m: MovementLog, ex: Exercise): boolean {
   return (
