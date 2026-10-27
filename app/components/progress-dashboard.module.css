@@ -219,11 +219,11 @@
 .latestBar {
   width: 100%;
   border-radius: 7px 7px 2px 2px;
-  background: linear-gradient(0deg, #778f4f, #afc58a);
+  background: linear-gradient(0deg, var(--chart-fill, #778f4f), var(--chart-fill-high, #afc58a));
   min-height: 2px;
 }
 .latestBar {
-  background: linear-gradient(0deg, #a0bf48, #d5f568);
+  background: linear-gradient(0deg, var(--chart-fill-high, #a0bf48), var(--lime));
 }
 .barColumn small {
   font-size: 9px;
@@ -312,11 +312,11 @@
   height: 5px;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--line);
+  background: var(--chart-track, var(--line));
 }
 .repTrack > div {
   height: 100%;
-  background: #a1bd54;
+  background: var(--chart-fill-high, #a1bd54);
   border-radius: 10px;
 }
 .target {

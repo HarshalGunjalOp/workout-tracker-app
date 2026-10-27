@@ -4021,27 +4021,36 @@ svg {
 .quick-log:hover, .quick-log:active { transform: none; }
 
 
-/* Device preference is applied before paint; explicit choices live on this device. */
+/* Theme roles are shared by surfaces, controls, charts, and feedback states. */
 :root { color-scheme: light; }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #151914;
-  --paper: #20261e;
-  --ink: #edf1e7;
-  --muted: #a8b29e;
-  --line: #394232;
-  --green: #bfd98d;
+  --bg: #151918;
+  --paper: #1e2421;
+  --ink: #edf2e9;
+  --muted: #a7b1a6;
+  --line: #354038;
+  --green: #bfd989;
+  --surface-inset: #171d19;
+  --surface-raised: #29332c;
+  --control-border: #53604f;
+  --accent-surface: #303e29;
+  --accent-border: #738b4d;
+  --accent-ink: #d7edab;
+  --on-accent: #25301b;
+  --chart-fill: #92ad66;
+  --chart-fill-high: #bcdc85;
+  --chart-track: #3e4c40;
+  --success-surface: #273625;
+  --success-border: #526b43;
+  --warning-surface: #3a3021;
+  --warning-ink: #f0d49e;
+  --danger-ink: #eab5a4;
   --theme-surface: var(--paper);
-  --theme-surface-soft: #2a3225;
+  --theme-surface-soft: #262f29;
   --theme-text: var(--ink);
-  --theme-muted: #b2bda6;
+  --theme-muted: #b0baad;
   --theme-border: var(--line);
-}
-:root[data-theme="dark"] :is(.lime-button, .brand-mark) {
-  color: #23271f;
-}
-:root[data-theme="dark"] ::selection {
-  color: #23271f;
 }
 .preference-row .switch {
   flex-shrink: 0;
@@ -4049,48 +4058,57 @@ svg {
   min-height: 28px;
 }
 .preference-row .switch > i { width: 22px; height: 22px; }
-
-:root[data-theme="dark"] :is(.timer-ready, .warmup-done .warmup-check) {
-  color: #23271f;
-}
-:root[data-theme="dark"] .timer-ready :is(strong, span, button) {
-  color: #23271f;
-}
 .switch > i { background: #fff; }
 
-/* Dark mode uses its own surface and state palette, preserving the light theme. */
-:root[data-theme="dark"] {
-  --bg: #151918;
-  --paper: #1e2421;
-  --ink: #edf2e9;
-  --muted: #a7b1a6;
-  --line: #354038;
-  --green: #bfd989;
-  --theme-surface-soft: #262f29;
-  --theme-muted: #b0baad;
-  --accent-surface: #303e29;
-  --accent-border: #738b4d;
-  --accent-ink: #d7edab;
-}
+/* Navigation and selected controls share one selected-state treatment. */
 :root[data-theme="dark"] :is(.day-tile.active-day, .nav-item.selected) {
   background: var(--accent-surface);
   border-color: var(--accent-border);
   color: var(--accent-ink);
   box-shadow: inset 0 0 0 1px #bad78612;
 }
-:root[data-theme="dark"] .day-tile.active-day strong {
-  color: var(--ink);
-}
+:root[data-theme="dark"] .day-tile.active-day strong { color: var(--ink); }
 :root[data-theme="dark"] .day-tile.active-day :is(small, .tile-bottom, div:first-child) {
   color: var(--accent-ink);
   border-color: #71825466;
 }
+:root[data-theme="dark"] :is(.lime-button, .brand-mark, .warmup-done .warmup-check, .summary-symbol) {
+  color: var(--on-accent);
+}
+:root[data-theme="dark"] ::selection { color: var(--on-accent); }
+:root[data-theme="dark"] .mobile-nav {
+  background: #1b221ef5;
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .mobile-nav button.selected { color: var(--accent-ink); }
+:root[data-theme="dark"] .mobile-nav .selected:before { background: var(--accent-surface); }
+:root[data-theme="dark"] .nav-dot { background: var(--lime); }
+:root[data-theme="dark"] :is(.brand-period, .lime-period, .mobile-brand span, .modal h2 > span) { color: var(--green); }
+:root[data-theme="dark"] :is(.profile-dot, .tiny-line, .day-dot) { background: var(--chart-fill-high); }
+:root[data-theme="dark"] :is(.day-index, .week-mini > .rest-day, .rest-symbol) { color: var(--muted); }
+:root[data-theme="dark"] :is(.personal-symbol, .preview-icon, .empty-icon, .history-check) {
+  background: var(--accent-surface);
+  color: var(--accent-ink);
+}
+:root[data-theme="dark"] :is(.day-tile:hover, .exercise-card.expanded) { border-color: var(--accent-border); }
+
+/* Chart fills must stay distinct from the card and from empty tracks. */
+:root[data-theme="dark"] .method-bars i { background: var(--chart-fill); }
+:root[data-theme="dark"] .method-bars i:last-child { background: var(--lime); }
+:root[data-theme="dark"] :is(.progress-track, .earned-dots i) { background: var(--chart-track); }
+:root[data-theme="dark"] .progress-track i { background: var(--chart-fill-high); }
+:root[data-theme="dark"] .earned-dots i.earned { background: var(--lime); box-shadow: none; }
+:root[data-theme="dark"] .consistency-ring {
+  background: conic-gradient(var(--lime) var(--progress), var(--chart-track) 0);
+}
+
+/* Working, completed, and disabled form fields have separate roles. */
 :root[data-theme="dark"] .quick-set-progress > .current {
   background: var(--lime);
-  color: #25301b;
+  color: var(--on-accent);
   box-shadow: 0 0 0 3px #d5f56812;
 }
-:root[data-theme="dark"] .quick-set-progress > .done {
+:root[data-theme="dark"] :is(.quick-set-progress > .done, .exercise-number.is-done) {
   background: var(--accent-surface);
   color: var(--accent-ink);
 }
@@ -4099,66 +4117,85 @@ svg {
   color: var(--accent-ink);
   border-color: var(--accent-border);
 }
-:root[data-theme="dark"] .rep-shortcuts button[aria-pressed="true"] > span {
-  color: var(--accent-ink);
-}
-:root[data-theme="dark"] .quick-stepper {
-  background: #171d19;
-  border-color: #3e4b3d;
+:root[data-theme="dark"] .rep-shortcuts button[aria-pressed="true"] > span { color: var(--accent-ink); }
+:root[data-theme="dark"] :is(.quick-stepper, .set-row input) {
+  background: var(--surface-inset);
+  border-color: var(--control-border);
+  color: var(--ink);
 }
 :root[data-theme="dark"] .quick-stepper button {
-  background: #2c362d;
-  color: #e1eccf;
+  background: var(--surface-raised);
+  color: var(--ink);
   box-shadow: none;
 }
+:root[data-theme="dark"] .set-row.logged input {
+  background: var(--success-surface);
+  border-color: var(--success-border);
+  color: var(--accent-ink);
+}
+:root[data-theme="dark"] .set-row input:disabled {
+  background: var(--surface-inset);
+  color: var(--muted);
+}
+:root[data-theme="dark"] .logged .log-button { color: var(--on-accent); }
+:root[data-theme="dark"] .exercise-title small > span { color: var(--muted); }
 :root[data-theme="dark"] .quick-logger {
   border-color: #3a473a;
   box-shadow: 0 12px 32px #00000018;
 }
-:root[data-theme="dark"] :is(.progression-cue, .quick-rest.ready, .exercise-win) {
-  background: #273625;
+:root[data-theme="dark"] :is(.progression-cue, .quick-rest.ready, .exercise-win, .next-exercise, .superset-guide) {
+  background: var(--success-surface);
   color: var(--accent-ink);
-  border-color: #4d6240;
+  border-color: var(--success-border);
 }
-:root[data-theme="dark"] .quick-rest.ready :is(button, span, svg, strong) {
-  color: var(--accent-ink);
-}
+:root[data-theme="dark"] .quick-rest.ready :is(button, span, svg, strong) { color: var(--accent-ink); }
 :root[data-theme="dark"] .earned-progress {
-  background: linear-gradient(115deg, #293626, #1e2421 80%);
-  border-color: #3c4c38;
+  background: linear-gradient(115deg, var(--success-surface), var(--paper) 80%);
+  border-color: var(--success-border);
 }
-:root[data-theme="dark"] .earned-dots i.earned {
-  background: #b7d872;
-  box-shadow: none;
-}
-:root[data-theme="dark"] :is(.earned-checks, .quick-complete > svg, .exercise-number.is-done) {
-  color: var(--accent-ink);
+:root[data-theme="dark"] :is(.earned-checks, .quick-complete > svg, .exercise-number.is-done, .superset-next) { color: var(--accent-ink); }
+:root[data-theme="dark"] :is(.program-exercise em, .detail-movement > div > span) {
+  background: var(--surface-raised);
+  color: var(--ink);
 }
 :root[data-theme="dark"] .set-row.record-set {
-  background: linear-gradient(100deg, #3c3320, #28271f);
+  background: linear-gradient(100deg, var(--warning-surface), #28271f);
   border-color: #756039;
   box-shadow: inset 3px 0 #d8b96b;
 }
-:root[data-theme="dark"] .record-set .set-index {
-  color: #f0d48e;
+:root[data-theme="dark"] .record-set .set-index { color: var(--warning-ink); }
+
+/* Timers keep bright progress rings around a dark, readable center. */
+:root[data-theme="dark"] .timer-circle {
+  background: conic-gradient(var(--chart-fill-high) var(--timer-progress), var(--chart-track) 0);
 }
-:root[data-theme="dark"] .storage-warning {
-  background: #3a3021;
-  color: #f0d49e;
+:root[data-theme="dark"] .timer-circle.timer-ready { background: var(--lime); }
+:root[data-theme="dark"] .timer-circle.timer-ready strong { color: var(--ink); }
+:root[data-theme="dark"] .timer-circle.timer-ready > span { color: var(--accent-ink); }
+:root[data-theme="dark"] .timer-controls > .timer-main {
+  background: var(--accent-surface);
+  color: var(--accent-ink);
 }
+:root[data-theme="dark"] .live-label > span { box-shadow: 0 0 0 4px #bcd78515; }
+:root[data-theme="dark"] .switch { background: var(--control-border); }
+:root[data-theme="dark"] .switch.on { background: var(--chart-fill-high); }
+
+/* Dialogs, warnings, and primary/secondary actions retain clear hierarchy. */
+:root[data-theme="dark"] .modal-backdrop { background: #080c0bb8; }
+:root[data-theme="dark"] .modal {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 80px #00000060;
+}
+:root[data-theme="dark"] .storage-warning { background: var(--warning-surface); color: var(--warning-ink); }
+:root[data-theme="dark"] .discard-button { color: var(--danger-ink); }
+:root[data-theme="dark"] .discard-button:hover { color: #ffd1c3; }
 :root[data-theme="dark"] .dark-button {
-  background: #303c2c;
-  color: #edf2e9;
+  background: var(--accent-surface);
+  color: var(--ink);
   border: 1px solid #4a5941;
 }
 :root[data-theme="dark"] .dark-button:hover { background: #3a4934; }
-:root[data-theme="dark"] :is(.hero-card, .hero) {
-  box-shadow: inset 0 0 0 1px #bdd69612;
-}
-:root[data-theme="dark"] .mobile-nav {
-  background: #1b221ef5;
-  border-color: var(--line);
-}
-:root[data-theme="dark"] .mobile-nav button.selected {
-  color: var(--accent-ink);
-}
+:root[data-theme="dark"] :is(.hero-card, .hero) { box-shadow: inset 0 0 0 1px #bdd69612; }
+:root[data-theme="dark"] :is(button, a, summary):focus-visible { outline-color: var(--lime); }
+:root[data-theme="dark"] :is(input, textarea):focus { outline-color: var(--chart-fill-high); }
