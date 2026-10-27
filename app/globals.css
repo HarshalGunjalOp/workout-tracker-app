@@ -4263,13 +4263,12 @@ svg {
   color: var(--ink);
 }
 
-/* Completion has its own full-width space instead of covering the next set markers. */
-.quick-logger > .exercise-win-slot { position:static; pointer-events:auto; }
-.quick-logger > .exercise-win-slot:not(:has(.exercise-win)) { height:0; }
-.quick-logger > .exercise-win-slot:has(.exercise-win) { margin:4px 0 18px; }
-.quick-logger > .exercise-win-slot .exercise-win { height:auto; min-height:112px; padding:20px 16px; gap:14px; border-radius:16px; }
-.quick-logger > .exercise-win-slot .exercise-win-marks { width:52px; min-width:52px; height:52px; }
-.quick-logger > .exercise-win-slot .exercise-win-marks > i { width:52px; height:52px; animation:exercise-win-enter .3s ease-out; }
-.quick-logger > .exercise-win-slot .exercise-win strong { font-size:15px; line-height:1.4; }
-.quick-logger > .exercise-win-slot .exercise-win div > span { margin-top:5px; font-size:17px; line-height:1.4; font-weight:600; white-space:normal; overflow:visible; color:var(--ink); }
-@media (prefers-reduced-motion:reduce) { .quick-logger > .exercise-win-slot .exercise-win-marks > i { animation:none; } }
+/* Set progress and completion share a reserved slot, so feedback never shifts the page. */
+.quick-logger .exercise-progress-slot { min-height:128px; }
+.exercise-progress-slot .exercise-win-slot { position:absolute; inset:0; margin:0; pointer-events:none; }
+.exercise-progress-slot .exercise-win { height:100%; min-height:128px; padding:16px; gap:14px; border-radius:16px; }
+.exercise-progress-slot .exercise-win-marks { width:52px; min-width:52px; height:52px; }
+.exercise-progress-slot .exercise-win-marks > i { width:52px; height:52px; animation:exercise-win-enter .3s ease-out; }
+.exercise-progress-slot .exercise-win strong { font-size:15px; line-height:1.4; }
+.exercise-progress-slot .exercise-win div > span { margin-top:5px; font-size:17px; line-height:1.4; font-weight:600; white-space:normal; overflow:visible; color:var(--ink); }
+@media (prefers-reduced-motion:reduce) { .exercise-progress-slot .exercise-win-marks > i { animation:none; } }
