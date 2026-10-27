@@ -4057,3 +4057,108 @@ svg {
   color: #23271f;
 }
 .switch > i { background: #fff; }
+
+/* Dark mode uses its own surface and state palette, preserving the light theme. */
+:root[data-theme="dark"] {
+  --bg: #151918;
+  --paper: #1e2421;
+  --ink: #edf2e9;
+  --muted: #a7b1a6;
+  --line: #354038;
+  --green: #bfd989;
+  --theme-surface-soft: #262f29;
+  --theme-muted: #b0baad;
+  --accent-surface: #303e29;
+  --accent-border: #738b4d;
+  --accent-ink: #d7edab;
+}
+:root[data-theme="dark"] :is(.day-tile.active-day, .nav-item.selected) {
+  background: var(--accent-surface);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1px #bad78612;
+}
+:root[data-theme="dark"] .day-tile.active-day strong {
+  color: var(--ink);
+}
+:root[data-theme="dark"] .day-tile.active-day :is(small, .tile-bottom, div:first-child) {
+  color: var(--accent-ink);
+  border-color: #71825466;
+}
+:root[data-theme="dark"] .quick-set-progress > .current {
+  background: var(--lime);
+  color: #25301b;
+  box-shadow: 0 0 0 3px #d5f56812;
+}
+:root[data-theme="dark"] .quick-set-progress > .done {
+  background: var(--accent-surface);
+  color: var(--accent-ink);
+}
+:root[data-theme="dark"] :is(.weight-steps button, .bodyweight-shortcut, .rep-shortcuts button)[aria-pressed="true"] {
+  background: var(--accent-surface);
+  color: var(--accent-ink);
+  border-color: var(--accent-border);
+}
+:root[data-theme="dark"] .rep-shortcuts button[aria-pressed="true"] > span {
+  color: var(--accent-ink);
+}
+:root[data-theme="dark"] .quick-stepper {
+  background: #171d19;
+  border-color: #3e4b3d;
+}
+:root[data-theme="dark"] .quick-stepper button {
+  background: #2c362d;
+  color: #e1eccf;
+  box-shadow: none;
+}
+:root[data-theme="dark"] .quick-logger {
+  border-color: #3a473a;
+  box-shadow: 0 12px 32px #00000018;
+}
+:root[data-theme="dark"] :is(.progression-cue, .quick-rest.ready, .exercise-win) {
+  background: #273625;
+  color: var(--accent-ink);
+  border-color: #4d6240;
+}
+:root[data-theme="dark"] .quick-rest.ready :is(button, span, svg, strong) {
+  color: var(--accent-ink);
+}
+:root[data-theme="dark"] .earned-progress {
+  background: linear-gradient(115deg, #293626, #1e2421 80%);
+  border-color: #3c4c38;
+}
+:root[data-theme="dark"] .earned-dots i.earned {
+  background: #b7d872;
+  box-shadow: none;
+}
+:root[data-theme="dark"] :is(.earned-checks, .quick-complete > svg, .exercise-number.is-done) {
+  color: var(--accent-ink);
+}
+:root[data-theme="dark"] .set-row.record-set {
+  background: linear-gradient(100deg, #3c3320, #28271f);
+  border-color: #756039;
+  box-shadow: inset 3px 0 #d8b96b;
+}
+:root[data-theme="dark"] .record-set .set-index {
+  color: #f0d48e;
+}
+:root[data-theme="dark"] .storage-warning {
+  background: #3a3021;
+  color: #f0d49e;
+}
+:root[data-theme="dark"] .dark-button {
+  background: #303c2c;
+  color: #edf2e9;
+  border: 1px solid #4a5941;
+}
+:root[data-theme="dark"] .dark-button:hover { background: #3a4934; }
+:root[data-theme="dark"] :is(.hero-card, .hero) {
+  box-shadow: inset 0 0 0 1px #bdd69612;
+}
+:root[data-theme="dark"] .mobile-nav {
+  background: #1b221ef5;
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .mobile-nav button.selected {
+  color: var(--accent-ink);
+}
