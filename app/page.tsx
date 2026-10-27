@@ -186,7 +186,7 @@ export default function Home() {
   } | null>(null);
   useEffect(() => {
     if (!setFeedback) return;
-    const timer = setTimeout(() => setSetFeedback(null), 3200);
+    const timer = setTimeout(() => setSetFeedback(null), 2200);
     return () => clearTimeout(timer);
   }, [setFeedback]);
   const progressRef = useRef<HTMLDivElement>(null);

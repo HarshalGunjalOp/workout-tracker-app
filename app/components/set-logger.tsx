@@ -233,7 +233,8 @@ export function SetLogger({
         {feedback?.complete ? (
           <div key={feedback.id} className="exercise-win">
             <div className="exercise-win-marks" aria-hidden="true">
-              <i><CheckCheck size={30} /></i>
+              {Array.from({ length: feedback.count }, (_, i) => <span key={i} style={{ "--mark": i } as React.CSSProperties}><Check size={14} /></span>)}
+              <i><CheckCheck size={24} /></i>
             </div>
             <div><strong>Exercise complete</strong><span>{feedback.name}</span></div>
           </div>
