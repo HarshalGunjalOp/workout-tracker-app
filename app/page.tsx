@@ -162,7 +162,7 @@ export default function Home() {
       if (raw) {
         const data = JSON.parse(raw);
         if (Array.isArray(data.sessions)) {
-          setSessions(data.sessions);
+          setSessions(mergeSessions(data.sessions, []));
           setActiveId(data.activeId ?? null);
           setExpanded(
             data.sessions
