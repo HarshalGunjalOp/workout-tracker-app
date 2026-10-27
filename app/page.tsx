@@ -186,7 +186,7 @@ export default function Home() {
   } | null>(null);
   useEffect(() => {
     if (!setFeedback) return;
-    const timer = setTimeout(() => setSetFeedback(null), 2200);
+    const timer = setTimeout(() => setSetFeedback(null), 3200);
     return () => clearTimeout(timer);
   }, [setFeedback]);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -787,12 +787,12 @@ export default function Home() {
           </div>
         ) : active ? (
           <main className="content workout-content">
-            <div className="session-toolbar">
+            <div ref={progressRef} className="session-toolbar">
               <button className="icon-button" aria-label="Back to overview" onClick={() => setActiveId(null)}><ChevronLeft size={20} /></button>
-              <div className="session-toolbar-title"><h1>{day.title}</h1><span>{clock(Math.floor(((active.finishedAt ? new Date(active.finishedAt).getTime() : now) - new Date(active.startedAt).getTime()) / 1000))} elapsed</span></div>
-              <button className="text-button session-finish" onClick={() => setFinishPrompt(true)}>Finish <CheckCheck size={16} /></button>
+              <div className="session-toolbar-title"><h1>{day.title}</h1><span>{clock(Math.floor(((active.finishedAt ? new Date(active.finishedAt).getTime() : now) - new Date(active.startedAt).getTime()) / 1000))} elapsed · {sync}</span></div>
+              <button className="dark-button session-finish" onClick={() => setFinishPrompt(true)}>Finish <CheckCheck size={16} /></button>
             </div>
-            <div ref={progressRef} className="session-progress" aria-label={`${done} of ${total} sets completed`}>
+            <div className="session-progress" aria-label={`${done} of ${total} sets completed`}>
               <div className="session-progress-track" aria-hidden="true"><span style={{ width: `${done / Math.max(1, total) * 100}%` }} /></div>
               <span>{done} / {total} sets</span>
             </div>

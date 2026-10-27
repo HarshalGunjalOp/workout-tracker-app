@@ -187,6 +187,16 @@ export function SetLogger({
           EXERCISE {mi + 1} / {session.movements.length}
         </span>
       </div>
+      <div className="exercise-win-slot" aria-live="polite" aria-atomic="true">
+        {feedback?.complete ? (
+          <div key={feedback.id} className="exercise-win">
+            <div className="exercise-win-marks" aria-hidden="true">
+              <i><CheckCheck size={30} /></i>
+            </div>
+            <div><strong>Exercise complete</strong><span>{feedback.name}</span></div>
+          </div>
+        ) : <span className="sr-only">{feedback ? "Set saved. Next set ready." : ""}</span>}
+      </div>
       {resting && (
       <div className={"rest-stage " + (restingNow ? "running" : "")} aria-label="Rest timer">
         <div className="rest-stage-heading"><Timer size={16} /><span>{restingNow ? "RECOVER" : "READY WHEN YOU ARE"}</span></div>
@@ -228,17 +238,6 @@ export function SetLogger({
         <strong>
           Set {si + 1} of {m.sets.length}
         </strong>
-      </div>
-      <div className="exercise-win-slot" aria-live="polite" aria-atomic="true">
-        {feedback?.complete ? (
-          <div key={feedback.id} className="exercise-win">
-            <div className="exercise-win-marks" aria-hidden="true">
-              {Array.from({ length: feedback.count }, (_, i) => <span key={i} style={{ "--mark": i } as React.CSSProperties}><Check size={14} /></span>)}
-              <i><CheckCheck size={24} /></i>
-            </div>
-            <div><strong>Exercise complete</strong><span>{feedback.name}</span></div>
-          </div>
-        ) : <span className="sr-only">{feedback ? "Set saved. Next set ready." : ""}</span>}
       </div>
       </div>
       <p className="quick-context">
