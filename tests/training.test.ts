@@ -17,7 +17,10 @@ test("all five program days preserve seven exercises and paired movements", () =
   assert.ok(PLAN.every((d) => d.exercises.length === 7));
   assert.equal(totalSets(PLAN[0]), 24);
   const lower = makeSession(PLAN[1], [], "id", now);
-  assert.equal(lower.movements.length, 9);
+  assert.equal(lower.movements.length, 8);
+  assert.deepEqual(lower.movements.filter((m) => m.exerciseId.startsWith("neck-flex")).map((m) => m.name), ["Lying plate neck flexion"]);
+  const saturday = makeSession(PLAN[4], [], "sat", now);
+  assert.deepEqual(saturday.movements.filter((m) => m.exerciseId.startsWith("side-neck")).map((m) => m.name), ["Lying side neck raise"]);
   assert.equal(
     lower.movements.filter((m) => m.exerciseId.startsWith("wrist-reverse"))
       .length,
@@ -50,8 +53,8 @@ test("the app prescription matches the updated V-taper blueprint", () => {
     { day: "lower-a", id: "smith-squat", sets: 3, reps: "10-12", rest: 90 },
     { day: "lower-a", id: "leg-curl", sets: 3, reps: "12-15", rest: 75 },
     { day: "lower-a", id: "leg-extension", sets: 3, reps: "12-15", rest: 60 },
-    { day: "lower-a", id: "standing-calf", sets: 4, reps: "15-20", rest: 60 },
-    { day: "lower-a", id: "rope-crunch", sets: 4, reps: "12-15", rest: 60 },
+    { day: "lower-a", id: "standing-calf", sets: 3, reps: "15-20", rest: 60 },
+    { day: "lower-a", id: "rope-crunch", sets: 3, reps: "12-15", rest: 60 },
     { day: "lower-a", id: "wrist-reverse", sets: 3, reps: "15-20", rest: 60 },
     { day: "lower-a", id: "neck-flex", sets: 3, reps: "15-20", rest: 60 },
     { day: "push", id: "smith-incline", sets: 4, reps: "8-12", rest: 90 },
@@ -71,7 +74,7 @@ test("the app prescription matches the updated V-taper blueprint", () => {
     { day: "lower-b", id: "db-rdl", sets: 3, reps: "10-12", rest: 90 },
     { day: "lower-b", id: "bulgarian", sets: 2, reps: "10-12", rest: 75 },
     { day: "lower-b", id: "slow-extension", sets: 3, reps: "12-15", rest: 60 },
-    { day: "lower-b", id: "seated-calf", sets: 4, reps: "15-20", rest: 60 },
+    { day: "lower-b", id: "seated-calf", sets: 3, reps: "15-20", rest: 60 },
     { day: "lower-b", id: "reverse-crunch", sets: 4, reps: "12-15", rest: 60 },
     { day: "lower-b", id: "vacuum", sets: 4, reps: "30-30", rest: 45 },
     { day: "lower-b", id: "side-neck", sets: 3, reps: "15-20", rest: 60 },
