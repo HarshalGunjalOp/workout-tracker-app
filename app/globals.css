@@ -3965,3 +3965,24 @@ svg {
   letter-spacing: 0.06em;
   color: #556516;
 }
+
+/* Celebrate earned work, with the next small goal always in reach. */
+.earned-progress { display:flex; align-items:center; gap:14px; padding:18px 20px; margin-bottom:20px; border:1px solid #d9e3cb; border-radius:16px; background:linear-gradient(110deg,#f1f7e7,#fff); }
+.earned-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:50%; background:#d9ff65; color:#26351d; }
+.earned-progress strong { font-size:14px; }
+.earned-dots { display:flex; gap:7px; margin-top:9px; }
+.earned-dots i { width:25px; height:7px; border-radius:9px; background:#dfe5d8; transition:background .3s,box-shadow .3s; }
+.earned-dots i.earned { background:#719c24; box-shadow:0 0 9px #b5db7180; animation:earned-pop .4s ease-out; }
+.earned-checks { display:flex; flex-wrap:wrap; gap:4px; margin-left:auto; max-width:90px; color:#578020; }
+.set-row.record-set { background:linear-gradient(100deg,#fff0be,#fff9e9); box-shadow:inset 3px 0 #d49a18; border-color:#eac877; }
+.record-set .set-index { color:#ac7400; }
+.set-celebration { position:fixed; inset:0; pointer-events:none; z-index:150; display:flex; justify-content:center; align-items:flex-start; padding-top: max(90px,15vh); }
+.celebration-badge { display:flex; align-items:center; gap:12px; padding:18px 24px; color:#e9ffc1; background:#25391f; border:1px solid #c5ef77; border-radius:22px; box-shadow:0 12px 50px #14220f38; animation:badge-arrive 2.6s both; }
+.celebration-badge strong { font-size:15px; letter-spacing:.1em; }
+.record-celebration .celebration-badge { color:#ffe49b; background:#352709; border-color:#f9d16c; box-shadow:0 0 60px #f9d16c66; }
+.confetti-field { position:absolute; left:50%; top:65%; }
+.confetti-field i { position:absolute; width:9px; height:15px; border-radius:2px; animation:pr-confetti 2.2s cubic-bezier(.12,.65,.35,1) both; animation-delay:var(--delay); }
+@keyframes pr-confetti { 0% { transform:translate(0,0) rotate(0); opacity:0; } 8% { opacity:1; } 65% { opacity:1; } 100% { transform:translate(var(--x),var(--y)) rotate(var(--spin)); opacity:0; } }
+@keyframes badge-arrive { 0% { opacity:0; transform:translateY(20px) scale(.8); } 12%,80% { opacity:1; transform:translateY(0) scale(1); } 100% { opacity:0; transform:translateY(-12px); } }
+@keyframes earned-pop { 50% { transform:scale(1.15); } }
+@media(prefers-reduced-motion:reduce) { .confetti-field { display:none; } .earned-dots i,.celebration-badge { animation:none; transition:none; } }

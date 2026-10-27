@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
+  Trophy,
   ArrowUpRight,
   ArrowRight,
   ChevronRight,
@@ -54,6 +55,7 @@ import {
   type Session,
   type SetLog,
 } from "@/lib/training";
+import { isRecord } from "@/lib/records";
 type Tab = "today" | "program" | "history" | "progress";
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(n);
@@ -135,6 +137,12 @@ export default function Home() {
     mi: number;
     si: number;
   } | null>(null);
+  const [celebration, setCelebration] = useState<{ id: number; pr: boolean; name: string } | null>(null);
+  useEffect(() => {
+    if (!celebration) return;
+    const timer = setTimeout(() => setCelebration(null), 2600);
+    return () => clearTimeout(timer);
+  }, [celebration]);
   const lastLogTime = useRef(0);
   const synced = useRef<Record<string, string>>({}),
     current = useRef(sessions),
@@ -485,6 +493,7 @@ export default function Home() {
     }));
     if (!set.done) {
       setNow(Date.now());
+      navigator.vibrate?.(30);
       setLastLogged({ sessionId: active!.id, mi, si });
       setRestLength(ex.rest);
       const hasRemaining = active!.movements.some((m, i) =>
@@ -495,18 +504,9 @@ export default function Home() {
       setRestEnd(
         hasRemaining && !roundContinues ? Date.now() + ex.rest * 1000 : null,
       );
-      navigator.vibrate?.(30);
-      const prev = previousMovement(
-        history,
-        active!.movements[mi].exerciseId,
-        active!.id,
-      )?.sets[si];
-      if (
-        prev?.done &&
-        Number(set.weight) * Number(set.reps) >
-          Number(prev.weight) * Number(prev.reps)
-      )
-        showNotice("More work than last time. Progress earned.");
+      const pr = isRecord(sessions, active!, mi, si, !!ex.timed);
+      const movementComplete = active!.movements[mi].sets.every((s, i) => s.done || i === si);
+      setCelebration({ id: Date.now(), pr, name: pr ? "NEW PR" : !hasRemaining ? "WORKOUT COMPLETE" : movementComplete ? "EXERCISE COMPLETE" : "SET BANKED" });
     }
   }
 
@@ -607,6 +607,23 @@ export default function Home() {
   ];
   return (
     <div className="app-shell">
+      {celebration && active && (
+        <div key={celebration.id} className={"set-celebration " + (celebration.pr ? "record-celebration" : "")}>
+          <div className="celebration-badge" role="status">
+            {celebration.pr ? <Trophy size={32} /> : <CheckCheck size={28} />}
+            <strong>{celebration.name}</strong>
+          </div>
+          {celebration.pr && <div className="confetti-field" aria-hidden="true">
+            {Array.from({ length: 72 }, (_, i) => <i key={i} style={{
+              "--x": `${Math.sin(i * 2.4) * 48}vw`,
+              "--y": `${-25 - (i % 7) * 9}vh`,
+              "--spin": `${(i % 2 ? 1 : -1) * (360 + i * 19)}deg`,
+              "--delay": `${(i % 6) * 25}ms`,
+              background: ["#d9ff65", "#ffd36b", "#ffffff", "#a8a1ff", "#ff91b6"][i % 5],
+            } as React.CSSProperties} />)}
+          </div>}
+        </div>
+      )}
       <aside className="sidebar">
         <a href="/" className="brand" aria-label="FORM home">
           <span className="brand-mark">
@@ -760,17 +777,16 @@ export default function Home() {
                 Finish <CheckCheck size={18} />
               </button>
             </div>
-            <div className="workout-progress">
-              <div className="progress-meta">
-                <strong>
-                  {done}
-                  <span> / {total} sets</span>
-                </strong>
-                <span>{fmt(volume(active))} kg lifted</span>
+            <div className="earned-progress" aria-label={`${done} sets completed`}>
+              <span className="earned-icon"><Flame size={22} /></span>
+              <div><strong>{done ? `${done} sets banked` : "One set. Build from there."}</strong>
+                <div className="earned-dots" aria-hidden="true">
+                  {(active.movements[focusMi] ?? active.movements.at(-1))?.sets.map((s, i) => <i key={`${focusMi}-${i}`} className={s.done ? "earned" : ""} />)}
+                </div>
               </div>
-              <div className="progress-track">
-                <i style={{ width: `${(done / total) * 100}%` }} />
-              </div>
+              <span className="earned-checks" aria-label={`${active.movements.filter(m => m.sets.every(s => s.done)).length} exercises completed`}>
+                {active.movements.filter(m => m.sets.every(s => s.done)).map(m => <CheckCheck key={m.exerciseId} size={18} />)}
+              </span>
             </div>
             <details
               className={
@@ -1002,11 +1018,11 @@ export default function Home() {
                               {m.sets.map((s, si) => (
                                 <div
                                   className={
-                                    "set-row " + (s.done ? "logged" : "")
+                                    "set-row " + (s.done ? "logged" : "") + (s.done && isRecord(sessions, active, mi, si, !!ex.timed) ? " record-set" : "")
                                   }
                                   key={si}
                                 >
-                                  <span className="set-index">{si + 1}</span>
+                                  <span className="set-index">{s.done && isRecord(sessions, active, mi, si, !!ex.timed) ? <Trophy size={18} aria-label="Personal record" /> : si + 1}</span>
                                   <span className="previous-set">
                                     {previous?.sets[si]?.done
                                       ? `${previous.sets[si].weight || "BW"} × ${previous.sets[si].reps}`

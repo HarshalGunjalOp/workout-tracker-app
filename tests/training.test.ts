@@ -215,3 +215,26 @@ test("supersets alternate A and B each round and recover uneven saved logs", () 
     }
   }
 });
+
+test("records require history and beat load then reps, with ties excluded", async () => {
+  const { isRecord } = await import("../lib/records.ts");
+  const prior = makeSession(PLAN[0], [], "prior", now);
+  prior.finishedAt = now;
+  prior.movements[0].sets[0] = { weight: "20", reps: "10", done: true };
+  const current = makeSession(PLAN[0], [prior], "current", now);
+  const set = current.movements[0].sets[0];
+  assert.equal(isRecord([], current, 0, 0), false);
+  assert.equal(isRecord([prior], current, 0, 0), false);
+  set.weight = "21"; set.reps = "8";
+  assert.equal(isRecord([prior], current, 0, 0), true);
+  set.weight = "20"; set.reps = "11";
+  assert.equal(isRecord([prior], current, 0, 0), true);
+  set.weight = "19"; set.reps = "20";
+  assert.equal(isRecord([prior], current, 0, 0), false);
+  set.weight = "20"; set.reps = "11"; set.done = true;
+  current.movements[0].sets[1] = { ...set };
+  assert.equal(isRecord([prior], current, 0, 1), false);
+  assert.equal(isRecord([{ ...prior, discardedAt: now }], current, 0, 0), false);
+  set.reps = "12";
+  assert.equal(isRecord([prior], current, 0, 0, true), true);
+});
