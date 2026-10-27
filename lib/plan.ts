@@ -164,7 +164,7 @@ export const PLAN: Day[] = [
         "standing-calf",
         "Smith machine standing calf raise",
         "Gastrocnemius",
-        3,
+        4,
         15,
         20,
         60,

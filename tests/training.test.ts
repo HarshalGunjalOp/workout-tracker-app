@@ -53,7 +53,7 @@ test("the app prescription matches the updated V-taper blueprint", () => {
     { day: "lower-a", id: "smith-squat", sets: 3, reps: "10-12", rest: 90 },
     { day: "lower-a", id: "leg-curl", sets: 3, reps: "12-15", rest: 75 },
     { day: "lower-a", id: "leg-extension", sets: 3, reps: "12-15", rest: 60 },
-    { day: "lower-a", id: "standing-calf", sets: 3, reps: "15-20", rest: 60 },
+    { day: "lower-a", id: "standing-calf", sets: 4, reps: "15-20", rest: 60 },
     { day: "lower-a", id: "rope-crunch", sets: 3, reps: "12-15", rest: 60 },
     { day: "lower-a", id: "wrist-reverse", sets: 3, reps: "15-20", rest: 60 },
     { day: "lower-a", id: "neck-flex", sets: 3, reps: "15-20", rest: 60 },
