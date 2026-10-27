@@ -127,13 +127,25 @@ export const duration = (s: Session) =>
         60000,
     ),
   );
+// Repair the obsolete second neck movement in saved Tuesday sessions.
+export function correctSessionHistory(session: Session): Session {
+  if (session.dayId !== "lower-a") return session;
+  const movements = session.movements
+    .filter((m) => m.exerciseId !== "neck-flex-b")
+    .map((m) => m.exerciseId === "neck-flex-a"
+      ? { ...m, exerciseId: "neck-flex", name: "Lying plate neck flexion" }
+      : m);
+  if (movements.length === session.movements.length &&
+      movements.every((m, i) => m === session.movements[i])) return session;
+  return { ...session, movements, updatedAt: new Date().toISOString() };
+}
 export function mergeSessions(local: Session[], remote: Session[]): Session[] {
   const map = new Map(local.map((s) => [s.id, s]));
   for (const s of remote) {
     if (!map.has(s.id) || map.get(s.id)!.updatedAt < s.updatedAt)
       map.set(s.id, s);
   }
-  return [...map.values()].sort((a, b) =>
+  return [...map.values()].map(correctSessionHistory).sort((a, b) =>
     b.startedAt.localeCompare(a.startedAt),
   );
 }
