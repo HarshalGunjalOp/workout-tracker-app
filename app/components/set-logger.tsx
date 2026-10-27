@@ -11,7 +11,11 @@ import {
   Timer,
 } from "lucide-react";
 import type { Exercise } from "@/lib/plan";
-import type { MovementLog, Session } from "@/lib/training";
+import {
+  supersetPartner,
+  type MovementLog,
+  type Session,
+} from "@/lib/training";
 
 const clock = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -145,6 +149,8 @@ export function SetLogger({
         )}
       </section>
     );
+  const partner = supersetPartner(session, ex, mi);
+  const partnerNext = partner?.sets[si] && !partner.sets[si].done;
   const last = previous?.sets[si]?.done
     ? previous.sets[si]
     : previous?.sets.filter((s) => s.done).at(-1);
@@ -152,7 +158,10 @@ export function SetLogger({
     Number(set.reps) > 0 &&
     (ex.timed || (set.weight !== "" && Number.isFinite(Number(set.weight))));
   const otherPending = session.movements.some(
-    (movement, i) => i !== mi && movement.sets.some((s) => !s.done),
+    (movement, i) =>
+      i !== mi &&
+      movement.exerciseId !== partner?.exerciseId &&
+      movement.sets.some((s) => !s.done),
   );
   return (
     <section className="quick-logger" aria-label="Next set">
@@ -164,7 +173,23 @@ export function SetLogger({
           EXERCISE {mi + 1} / {session.movements.length}
         </span>
       </div>
+      {partner && (
+        <div className="superset-guide">
+          <strong>
+            SUPERSET · ROUND {si + 1} OF {m.sets.length}
+          </strong>
+          <p>{ex.name.split(" + ").join(" → ")}</p>
+          <span>Alternate one set of each. Rest {ex.rest}s after both.</span>
+        </div>
+      )}
       <h2>{m.name}</h2>
+      {partner && (
+        <p className="superset-next">
+          {partnerNext
+            ? `Then ${partner.name} · no rest between movements`
+            : `Then rest ${ex.rest}s${si + 1 < m.sets.length ? " · next round follows automatically" : " · superset complete"}`}
+        </p>
+      )}
       <div
         className="quick-set-progress"
         aria-label={`Set ${si + 1} of ${m.sets.length}`}
@@ -296,7 +321,8 @@ export function SetLogger({
         )}
         {otherPending && (
           <button onClick={onLater}>
-            Do this later <ArrowRight size={15} />
+            {partner ? "Do superset later" : "Do this later"}{" "}
+            <ArrowRight size={15} />
           </button>
         )}
       </div>

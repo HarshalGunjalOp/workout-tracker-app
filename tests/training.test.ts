@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { PLAN, nextDay, totalSets } from "../lib/plan.ts";
 import {
   makeSession,
+  supersetFocus,
+  supersetPartner,
   canProgress,
   mergeSessions,
   volume,
@@ -18,9 +20,19 @@ test("all five program days preserve seven exercises and paired movements", () =
   assert.equal(totalSets(PLAN[0]), 24);
   const lower = makeSession(PLAN[1], [], "id", now);
   assert.equal(lower.movements.length, 8);
-  assert.deepEqual(lower.movements.filter((m) => m.exerciseId.startsWith("neck-flex")).map((m) => m.name), ["Lying plate neck flexion"]);
+  assert.deepEqual(
+    lower.movements
+      .filter((m) => m.exerciseId.startsWith("neck-flex"))
+      .map((m) => m.name),
+    ["Lying plate neck flexion"],
+  );
   const saturday = makeSession(PLAN[4], [], "sat", now);
-  assert.deepEqual(saturday.movements.filter((m) => m.exerciseId.startsWith("side-neck")).map((m) => m.name), ["Lying side neck raise"]);
+  assert.deepEqual(
+    saturday.movements
+      .filter((m) => m.exerciseId.startsWith("side-neck"))
+      .map((m) => m.name),
+    ["Lying side neck raise"],
+  );
   assert.equal(
     lower.movements.filter((m) => m.exerciseId.startsWith("wrist-reverse"))
       .length,
@@ -176,4 +188,30 @@ test("correcting a completed set retains its completion and other set values", (
   assert.equal(edited.movements[0].sets[0].done, true);
   assert.equal(edited.movements[0].sets[0].reps, "9");
   assert.deepEqual(edited.movements[0].sets[1], session.movements[0].sets[1]);
+});
+
+test("supersets alternate A and B each round and recover uneven saved logs", () => {
+  for (const day of PLAN) {
+    for (const ex of day.exercises.filter((e) => e.superset)) {
+      const session = makeSession(day, [], "pair", now);
+      const a = session.movements.findIndex(
+        (m) => m.exerciseId === ex.id + "-a",
+      );
+      const b = a + 1;
+      assert.equal(supersetPartner(session, ex, a), session.movements[b]);
+      for (let round = 0; round < ex.sets; round++) {
+        assert.equal(supersetFocus(session, ex, b), a);
+        assert.equal(supersetPartner(session, ex, a)!.sets[round].done, false);
+        session.movements[a].sets[round].done = true;
+        assert.equal(supersetFocus(session, ex, a), b);
+        assert.equal(supersetPartner(session, ex, b)!.sets[round].done, true);
+        session.movements[b].sets[round].done = true;
+      }
+      assert.equal(supersetFocus(session, ex, a), a);
+      session.movements[b].sets[0].done = false;
+      assert.equal(supersetFocus(session, ex, a), b);
+      session.movements[a].sets[0].done = false;
+      assert.equal(supersetFocus(session, ex, b), a);
+    }
+  }
 });

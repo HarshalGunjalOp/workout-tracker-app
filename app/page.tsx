@@ -39,6 +39,9 @@ import { sessionSchema } from "@/lib/schema";
 import { SetLogger } from "./components/set-logger";
 import {
   makeSession,
+  movementsFor,
+  supersetFocus,
+  supersetPartner,
   editSet,
   previousMovement,
   completedSets,
@@ -487,7 +490,11 @@ export default function Home() {
       const hasRemaining = active!.movements.some((m, i) =>
         m.sets.some((s, j) => !s.done && !(i === mi && j === si)),
       );
-      setRestEnd(hasRemaining ? Date.now() + ex.rest * 1000 : null);
+      const partner = supersetPartner(active!, ex, mi);
+      const roundContinues = partner?.sets[si] && !partner.sets[si].done;
+      setRestEnd(
+        hasRemaining && !roundContinues ? Date.now() + ex.rest * 1000 : null,
+      );
       navigator.vibrate?.(30);
       const prev = previousMovement(
         history,
@@ -567,10 +574,19 @@ export default function Home() {
     active?.movements.findIndex(
       (m) => m.exerciseId === expanded && m.sets.some((s) => !s.done),
     ) ?? -1;
-  const focusMi =
+  const candidateMi =
     selectedMi >= 0
       ? selectedMi
       : (active?.movements.findIndex((m) => m.sets.some((s) => !s.done)) ?? -1);
+  const candidateEx = day.exercises.find(
+    (e) =>
+      e.id === active?.movements[candidateMi]?.exerciseId ||
+      (e.superset &&
+        movementsFor(e).some(
+          (m) => m.id === active?.movements[candidateMi]?.exerciseId,
+        )),
+  );
+  const focusMi = active ? supersetFocus(active, candidateEx, candidateMi) : -1;
   const focusMovement = active?.movements[focusMi];
   const focusEx = day.exercises.find(
     (e) =>
@@ -802,16 +818,28 @@ export default function Home() {
                 if (!focusEx || Date.now() - lastLogTime.current < 600) return;
                 lastLogTime.current = Date.now();
                 toggleSet(focusMi, focusSi, focusEx);
-                const next = active.movements[focusMi].sets.some(
-                  (s, i) => !s.done && i !== focusSi,
+                const logged = {
+                  ...active,
+                  movements: active.movements.map((m, i) =>
+                    i !== focusMi
+                      ? m
+                      : {
+                          ...m,
+                          sets: m.sets.map((set, j) =>
+                            j === focusSi ? { ...set, done: true } : set,
+                          ),
+                        },
+                  ),
+                };
+                const pairedMi = supersetFocus(logged, focusEx, focusMi);
+                const next = logged.movements[pairedMi]?.sets.some(
+                  (s) => !s.done,
                 )
-                  ? active.movements[focusMi]
-                  : (active.movements.find(
+                  ? logged.movements[pairedMi]
+                  : (logged.movements.find(
                       (m, i) => i > focusMi && m.sets.some((s) => !s.done),
                     ) ??
-                    active.movements.find(
-                      (m, i) => i !== focusMi && m.sets.some((s) => !s.done),
-                    ));
+                    logged.movements.find((m) => m.sets.some((s) => !s.done)));
                 setExpanded(next?.exerciseId ?? null);
               }}
               onUndo={() => {
@@ -837,10 +865,20 @@ export default function Home() {
               onLater={() => {
                 const next =
                   active.movements.find(
-                    (m, i) => i > focusMi && m.sets.some((s) => !s.done),
+                    (m, i) =>
+                      i > focusMi &&
+                      !movementsFor(focusEx!).some(
+                        (part) => part.id === m.exerciseId,
+                      ) &&
+                      m.sets.some((s) => !s.done),
                   ) ??
                   active.movements.find(
-                    (m, i) => i !== focusMi && m.sets.some((s) => !s.done),
+                    (m, i) =>
+                      i !== focusMi &&
+                      !movementsFor(focusEx!).some(
+                        (part) => part.id === m.exerciseId,
+                      ) &&
+                      m.sets.some((s) => !s.done),
                   );
                 if (next) setExpanded(next.exerciseId);
                 showNotice(
@@ -908,14 +946,19 @@ export default function Home() {
                             )}
                           </span>
                           <span className="exercise-title">
-                            <strong>{m.name}</strong>
+                            <strong>
+                              {m.name}
+                              {ex.superset && (
+                                <span className="superset-tag">SUPERSET</span>
+                              )}
+                            </strong>
                             <small>
                               {ex.muscle} <span>·</span>{" "}
                               {ex.min === ex.max
                                 ? ex.min
                                 : `${ex.min}–${ex.max}`}{" "}
                               {ex.timed ? "sec" : "reps"} <span>·</span>{" "}
-                              {ex.rest}s rest
+                              {ex.rest}s {ex.superset ? "after both" : "rest"}
                             </small>
                           </span>
                           <span className="exercise-count">
@@ -1524,7 +1567,12 @@ export default function Home() {
                           </span>
                           <span className="preview-name">
                             <strong>{ex.name}</strong>
-                            <small>{ex.muscle}</small>
+                            <small>
+                              {ex.superset
+                                ? "SUPERSET · Alternate both movements each round · "
+                                : ""}
+                              {ex.muscle}
+                            </small>
                           </span>
                           <span className="preview-prescription">
                             {ex.sets} <span>×</span> {ex.min}–{ex.max}
@@ -1638,9 +1686,14 @@ export default function Home() {
                               <div>
                                 <strong>
                                   {ex.name}
-                                  {ex.superset && <em>PAIRED</em>}
+                                  {ex.superset && <em>SUPERSET</em>}
                                 </strong>
-                                <small>{ex.muscle}</small>
+                                <small>
+                                  {ex.superset
+                                    ? "SUPERSET · Alternate both movements each round · "
+                                    : ""}
+                                  {ex.muscle}
+                                </small>
                                 <p>{ex.cue}</p>
                               </div>
                               <span>
@@ -1650,7 +1703,7 @@ export default function Home() {
                                   : `${ex.min}–${ex.max}`}
                                 <small>
                                   {ex.timed ? "seconds" : "reps"} · {ex.rest}s
-                                  rest
+                                  {ex.superset ? " after both" : " rest"}
                                 </small>
                               </span>
                             </div>

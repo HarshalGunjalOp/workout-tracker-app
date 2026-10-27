@@ -153,3 +153,37 @@ export function localDate(iso: string): string {
     day: "2-digit",
   }).format(new Date(iso));
 }
+
+// Select the earliest unfinished round, keeping A before B within each round.
+// This also recovers older sessions where one movement was logged ahead.
+export function supersetFocus(
+  session: Session,
+  ex: Exercise | undefined,
+  mi: number,
+): number {
+  if (!ex?.superset) return mi;
+  const indices = movementsFor(ex)
+    .map((m) =>
+      session.movements.findIndex((entry) => entry.exerciseId === m.id),
+    )
+    .filter((i) => i >= 0);
+  const rounds = Math.max(
+    0,
+    ...indices.map((i) => session.movements[i].sets.length),
+  );
+  for (let si = 0; si < rounds; si++) {
+    for (const i of indices) {
+      const set = session.movements[i].sets[si];
+      if (set && !set.done) return i;
+    }
+  }
+  return mi;
+}
+
+export function supersetPartner(session: Session, ex: Exercise, mi: number) {
+  if (!ex.superset) return undefined;
+  return session.movements.find(
+    (m, i) =>
+      i !== mi && movementsFor(ex).some((part) => part.id === m.exerciseId),
+  );
+}

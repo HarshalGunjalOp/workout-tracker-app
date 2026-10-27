@@ -3930,3 +3930,38 @@ svg {
     display: none;
   }
 }
+
+.superset-guide {
+  padding: 14px 16px;
+  margin: 16px 0;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+  color: var(--green);
+  background: #f2f7e7;
+}
+.superset-guide strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.superset-guide p {
+  margin: 8px 0;
+  color: inherit;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.superset-guide span,
+.superset-next {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.superset-next {
+  margin: 8px 0 16px;
+}
+.superset-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #556516;
+}
