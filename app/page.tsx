@@ -34,6 +34,7 @@ import {
   Activity,
   Volume2,
   VolumeX,
+  Moon,
 } from "lucide-react";
 import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
 import { sessionSchema } from "@/lib/schema";
@@ -134,6 +135,40 @@ export default function Home() {
     [warmup, setWarmup] = useState(false),
     [saveError, setSaveError] = useState(false),
     [syncTick, setSyncTick] = useState(0);
+  const [darkMode, setDarkMode] = useState(false);
+  useEffect(() => {
+    const update = () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      setDarkMode(dark);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#151914" : "#f7f8f2");
+    };
+    update();
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const followDevice = () => {
+      try { if (localStorage.getItem("form-theme")) return; } catch {}
+      document.documentElement.dataset.theme = media.matches ? "dark" : "light";
+      update();
+    };
+    const syncTheme = (event: StorageEvent) => {
+      if (event.key !== "form-theme" && event.key !== null) return;
+      document.documentElement.dataset.theme = event.newValue === "dark" || event.newValue === "light"
+        ? event.newValue : media.matches ? "dark" : "light";
+      update();
+    };
+    media.addEventListener("change", followDevice);
+    window.addEventListener("storage", syncTheme);
+    return () => {
+      media.removeEventListener("change", followDevice);
+      window.removeEventListener("storage", syncTheme);
+    };
+  }, []);
+  function toggleTheme() {
+    const next = darkMode ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "dark" ? "#151914" : "#f7f8f2");
+    setDarkMode(next === "dark");
+    try { localStorage.setItem("form-theme", next); } catch {}
+  }
   const [lastLogged, setLastLogged] = useState<{
     sessionId: string;
     mi: number;
@@ -1862,6 +1897,22 @@ export default function Home() {
               Your training space<span>.</span>
             </h2>
             <p>Simple by design. Personal by default.</p>
+            <div className="preference-row">
+              <Moon size={20} />
+              <div>
+                <strong>Dark mode</strong>
+                <small>A softer glow. Remembered on this device.</small>
+              </div>
+              <button
+                className={"switch " + (darkMode ? "on" : "")}
+                role="switch"
+                aria-checked={darkMode}
+                aria-label="Dark mode"
+                onClick={toggleTheme}
+              >
+                <i />
+              </button>
+            </div>
             <div className="preference-row">
               <Volume2 size={20} />
               <div>
