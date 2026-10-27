@@ -38,6 +38,7 @@ import {
 import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
 import { sessionSchema } from "@/lib/schema";
 import { SetLogger } from "./components/set-logger";
+import { ProgressDashboard } from "./components/progress-dashboard";
 import {
   nextWorkoutFocus,
   makeSession,
@@ -1802,118 +1803,7 @@ export default function Home() {
                 )}
               </>
             )}
-            {tab === "progress" && (
-              <>
-                <div className="page-heading">
-                  <div>
-                    <div className="eyebrow">EVIDENCE, NOT GUESSWORK</div>
-                    <h1>
-                      The work is adding up
-                      <span className="lime-period">.</span>
-                    </h1>
-                    <p>Your numbers. Your momentum. Your next breakthrough.</p>
-                  </div>
-                  <TrendingUp size={30} />
-                </div>
-                <div className="stat-grid">
-                  {[
-                    {
-                      label: "TOTAL SESSIONS",
-                      value: history.length,
-                      suffix: "workouts",
-                    },
-                    {
-                      label: "WORKING SETS",
-                      value: history.reduce((a, s) => a + completedSets(s), 0),
-                      suffix: "sets logged",
-                    },
-                    {
-                      label: "TOTAL VOLUME",
-                      value: fmt(history.reduce((a, s) => a + volume(s), 0)),
-                      suffix: "kg lifted",
-                    },
-                  ].map((s) => (
-                    <div className="stat-card" key={s.label}>
-                      <span>{s.label}</span>
-                      <strong>{s.value}</strong>
-                      <small>{s.suffix}</small>
-                    </div>
-                  ))}
-                </div>
-                {history.length === 0 ? (
-                  <Empty
-                    icon={ChartNoAxesCombined}
-                    title="Your baseline comes first."
-                  >
-                    Log your first session to start tracking your strongest sets
-                    and see which movements are ready for more weight.
-                  </Empty>
-                ) : (
-                  <>
-                    <div className="section-heading">
-                      <div>
-                        <h2>
-                          Your next milestones<span>.</span>
-                        </h2>
-                        <p>
-                          Strongest logged sets and your next progression
-                          opportunities.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="milestone-grid">
-                      {PLAN.flatMap((d) =>
-                        d.exercises.flatMap((ex) => {
-                          const m = previousMovement(history, ex.id);
-                          if (!m || ex.timed) return [];
-                          const best = history
-                            .flatMap((s) =>
-                              s.movements
-                                .filter((x) => x.exerciseId === ex.id)
-                                .flatMap((m) => m.sets.filter((s) => s.done)),
-                            )
-                            .sort(
-                              (a, b) =>
-                                Number(b.weight) - Number(a.weight) ||
-                                Number(b.reps) - Number(a.reps),
-                            )[0];
-                          if (!best) return [];
-                          return (
-                            <div className="milestone-card" key={ex.id}>
-                              <span className="milestone-muscle">
-                                {ex.muscle}
-                              </span>
-                              <h3>{ex.name}</h3>
-                              <strong>
-                                {best.weight || "BW"} <small>kg ×</small>{" "}
-                                {best.reps}
-                                <small> reps</small>
-                              </strong>
-                              <p
-                                className={
-                                  canProgress(m, ex) ? "ready" : "keep-building"
-                                }
-                              >
-                                {canProgress(m, ex) ? (
-                                  <>
-                                    <ArrowUp size={14} /> Ready for more weight
-                                  </>
-                                ) : (
-                                  <>
-                                    <Target size={14} /> Build toward {ex.max}{" "}
-                                    reps across {ex.sets} sets
-                                  </>
-                                )}
-                              </p>
-                            </div>
-                          );
-                        }),
-                      )}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+            {tab === "progress" && <ProgressDashboard history={history} />}
             <footer className="page-footer">
               <span>
                 FORM<span className="lime-period">.</span>{" "}
