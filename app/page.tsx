@@ -153,9 +153,9 @@ export default function Home() {
     const timer = setTimeout(() => setSetFeedback(null), 2200);
     return () => clearTimeout(timer);
   }, [setFeedback]);
-  const loggerRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
   function revealNextExercise() {
-    requestAnimationFrame(() => loggerRef.current?.scrollIntoView({
+    requestAnimationFrame(() => progressRef.current?.scrollIntoView({
       block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
     }));
   }
@@ -791,7 +791,7 @@ export default function Home() {
                 Finish <CheckCheck size={18} />
               </button>
             </div>
-            <div className="earned-progress" aria-label={`${done} sets completed`}>
+            <div ref={progressRef} className="earned-progress" aria-label={`${done} sets completed`}>
               <span className="earned-icon"><Flame size={22} /></span>
               <div><strong>{done ? `${done} sets banked` : "One set. Build from there."}</strong>
                 <div className="earned-dots" aria-hidden="true">
@@ -825,7 +825,7 @@ export default function Home() {
                 <span className="warmup-time">5 MIN</span>
               </button>
             </details>
-            <div ref={loggerRef} className="logger-anchor">
+            <div className="logger-anchor">
             <SetLogger
               session={active}
               feedback={setFeedback}

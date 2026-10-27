@@ -113,17 +113,26 @@ export function SetLogger({
   onRestSkip: () => void;
   onReview: () => void;
 }) {
-  const [weightStep, setWeightStep] = useState(2.5);
+  const [weightSteps, setWeightSteps] = useState<Record<string, number>>({});
   useEffect(() => {
     try {
-      const saved = Number(localStorage.getItem("form-weight-step"));
-      if ([1.25, 2.5, 5].includes(saved)) setWeightStep(saved);
+      const saved: unknown = JSON.parse(localStorage.getItem("form-weight-steps-v1") ?? "{}");
+      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+        setWeightSteps(Object.fromEntries(Object.entries(saved).filter(
+          ([, step]) => typeof step === "number" && [1.25, 2.5, 5].includes(step),
+        )));
+      }
     } catch {}
   }, []);
+  const exerciseId = session.movements[mi]?.exerciseId;
+  const weightStep = (exerciseId && weightSteps[exerciseId]) || 2.5;
+  const hasWeightStep = !!exerciseId && Object.hasOwn(weightSteps, exerciseId);
   function chooseWeightStep(step: number) {
-    setWeightStep(step);
+    if (!exerciseId) return;
+    const next = { ...weightSteps, [exerciseId]: step };
+    setWeightSteps(next);
     try {
-      localStorage.setItem("form-weight-step", String(step));
+      localStorage.setItem("form-weight-steps-v1", JSON.stringify(next));
     } catch {}
   }
   const m = session.movements[mi];
@@ -247,7 +256,7 @@ export function SetLogger({
       </div>
       {!ex.timed && (
         <div className="quick-shortcuts">
-          <div
+          {!hasWeightStep && <div
             className="weight-steps"
             role="group"
             aria-label="Weight adjustment size"
@@ -262,7 +271,7 @@ export function SetLogger({
                 {n}
               </button>
             ))}
-          </div>
+          </div>}
           <button
             className="bodyweight-shortcut"
             aria-pressed={set.weight === "0"}
@@ -312,11 +321,10 @@ export function SetLogger({
         </div>
       )}
       <button
-        className={"lime-button quick-log " + (feedback ? "quick-log-earned" : "")}
+        className="lime-button quick-log"
         disabled={!valid}
         onClick={onLog}
       >
-        <span key={feedback?.id ?? "ready"} className={feedback ? "log-check-earned" : ""}><Check size={22} /></span>
         <span>
           {valid
             ? `Log ${ex.timed ? `${set.reps}s hold` : `${Number(set.weight) === 0 ? "bodyweight" : `${set.weight} kg`} × ${set.reps}`}`
@@ -324,7 +332,6 @@ export function SetLogger({
               ? `Choose ${ex.timed ? "duration" : "reps"} to log`
               : "Choose your weight to log"}
         </span>
-        <ArrowRight size={20} />
       </button>
       <div className="quick-footer">
         {canUndo ? (

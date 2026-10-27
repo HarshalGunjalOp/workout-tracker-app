@@ -3696,7 +3696,7 @@ svg {
   gap: 14px;
 }
 .quick-log > span {
-  flex: 1;
+  text-align: center;
 }
 .quick-footer {
   display: flex;
@@ -3998,15 +3998,13 @@ svg {
 .exercise-win-marks > i { display:grid; place-items:center; width:40px; height:40px; border-radius:50%; color:#fff; background:#527a28; animation:win-check .7s both; }
 .next-exercise-title { animation:next-exercise-enter .3s ease-out; }
 .quick-set-progress .done { animation:set-marker-fill .35s ease-out; }
-.quick-log-earned { animation:log-earned .5s ease-out; }
 .quick-footer button { min-height:44px; }
 @keyframes exercise-win-enter { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
 @keyframes marks-merge { 0% { opacity:1; transform:translateX(calc((var(--mark) - 1) * 14px)) scale(.8); } 70% { opacity:1; transform:translateX(0) scale(1); } 100% { opacity:0; transform:scale(.4); } }
 @keyframes win-check { 0%,45% { opacity:0; transform:scale(.5); } 80% { opacity:1; transform:scale(1.12); } 100% { opacity:1; transform:scale(1); } }
 @keyframes next-exercise-enter { from { opacity:.45; transform:translateX(8px); } to { opacity:1; transform:translateX(0); } }
 @keyframes set-marker-fill { 50% { transform:scale(1.18); box-shadow:0 0 14px #a2cf52; } }
-@keyframes log-earned { 35% { box-shadow:0 0 0 6px #b6dc6740; } }
-@media(prefers-reduced-motion:reduce) { .exercise-win, .exercise-win-marks > span, .exercise-win-marks > i, .next-exercise-title, .quick-set-progress .done, .quick-log-earned { animation:none; } .exercise-win-marks > span { display:none; } }
+@media(prefers-reduced-motion:reduce) { .exercise-win, .exercise-win-marks > span, .exercise-win-marks > i, .next-exercise-title, .quick-set-progress .done { animation:none; } .exercise-win-marks > span { display:none; } }
 .logger-anchor { scroll-margin-top:20px; }
 .exercise-progress-slot { position:relative; min-height:72px; display:flex; align-items:center; margin:10px 0; }
 .exercise-progress-slot .quick-set-progress { margin:0; }
@@ -4014,6 +4012,8 @@ svg {
 .exercise-win { height:100%; margin:0; box-sizing:border-box; }
 .exercise-win > div:last-child { min-width:0; }
 .exercise-win div > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.log-check-earned { animation:set-marker-fill .4s ease-out; display:flex; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-@media(prefers-reduced-motion:reduce) { .log-check-earned { animation:none; } }
+
+.earned-progress { scroll-margin-top: 20px; }
+
+.quick-log:hover, .quick-log:active { transform: none; }
