@@ -238,3 +238,17 @@ test("records require history and beat load then reps, with ties excluded", asyn
   set.reps = "12";
   assert.equal(isRecord([prior], current, 0, 0, true), true);
 });
+
+test("saved Tuesday neck extension is removed while flexion sets survive sync", () => {
+  const session = makeSession(PLAN[1], [], "old-tuesday", now);
+  const flexion = session.movements.find((m) => m.exerciseId === "neck-flex")!;
+  flexion.exerciseId = "neck-flex-a";
+  flexion.sets[0] = { weight: "5", reps: "18", done: true };
+  session.movements.push({ ...flexion, exerciseId: "neck-flex-b", name: "extension" });
+  const [fixed] = mergeSessions([session], []);
+  assert.equal(fixed.movements.some((m) => m.exerciseId === "neck-flex-b"), false);
+  assert.deepEqual(fixed.movements.find((m) => m.exerciseId === "neck-flex")?.sets, flexion.sets);
+  assert.deepEqual(fixed.movements.filter((m) => m.exerciseId !== "neck-flex"), session.movements.filter((m) => !m.exerciseId.startsWith("neck-flex")));
+  assert.deepEqual(mergeSessions([fixed], [session]), [fixed]);
+  assert.deepEqual(mergeSessions([], [session])[0].movements, fixed.movements);
+});
