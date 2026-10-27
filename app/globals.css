@@ -4250,3 +4250,12 @@ svg {
 @media (prefers-reduced-motion:reduce) {
   .quick-stepper input, .session-progress-track > span { transition:none; }
 }
+
+/* Keep the next-set prompt readable while required values are missing. */
+.lime-button.quick-log:disabled {
+  opacity: 1;
+  background: var(--line);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--control-border, #c8cdbf);
+  transform: none;
+}
