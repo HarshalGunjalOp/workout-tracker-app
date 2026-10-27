@@ -199,3 +199,28 @@ export function supersetPartner(session: Session, ex: Exercise, mi: number) {
       i !== mi && movementsFor(ex).some((part) => part.id === m.exerciseId),
   );
 }
+
+// Pending exercise groups, with deferred groups moved to the back. Supersets
+// stay together and supersetFocus chooses the next unfinished round.
+export function workoutQueue(session: Session, day: Day, deferred: string[] = []) {
+  const pending = day.exercises.filter(ex =>
+    movementsFor(ex).some(part => session.movements.some(m =>
+      m.exerciseId === part.id && m.sets.some(s => !s.done))),
+  );
+  return [
+    ...pending.filter(ex => !deferred.includes(ex.id)),
+    ...deferred.flatMap(id => pending.filter(ex => ex.id === id)),
+  ];
+}
+
+export function nextWorkoutFocus(
+  session: Session, day: Day, deferred: string[] = [], currentId?: string | null,
+) {
+  const queue = workoutQueue(session, day, deferred);
+  const preferred = queue.find(ex => movementsFor(ex).some(m => m.id === currentId));
+  const ex = preferred ?? queue[0];
+  if (!ex) return -1;
+  const mi = session.movements.findIndex(m =>
+    movementsFor(ex).some(part => part.id === m.exerciseId) && m.sets.some(s => !s.done));
+  return supersetFocus(session, ex, mi);
+}

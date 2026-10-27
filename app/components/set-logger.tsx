@@ -82,6 +82,7 @@ function Stepper({
 
 export function SetLogger({
   session,
+  feedback,
   mi,
   ex,
   previous,
@@ -96,6 +97,7 @@ export function SetLogger({
   onRestSkip,
   onReview,
 }: {
+  feedback?: { id: number; name: string; complete: boolean; count: number } | null;
   session: Session;
   mi: number;
   ex?: Exercise;
@@ -164,7 +166,7 @@ export function SetLogger({
       movement.sets.some((s) => !s.done),
   );
   return (
-    <section className="quick-logger" aria-label="Next set">
+    <section className={"quick-logger " + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
       <div className="quick-overline">
         <span>
           {resting && seconds > 0 ? "RESTING · NEXT UP" : "YOUR NEXT SET"}
@@ -182,7 +184,7 @@ export function SetLogger({
           <span>Alternate one set of each. Rest {ex.rest}s after both.</span>
         </div>
       )}
-      <h2>{m.name}</h2>
+      <h2 key={m.exerciseId} className="next-exercise-title" aria-live="polite">{m.name}</h2>
       {partner && (
         <p className="superset-next">
           {partnerNext
@@ -190,18 +192,31 @@ export function SetLogger({
             : `Then rest ${ex.rest}s${si + 1 < m.sets.length ? " · next round follows automatically" : " · superset complete"}`}
         </p>
       )}
+      <div className="exercise-progress-slot">
       <div
         className="quick-set-progress"
         aria-label={`Set ${si + 1} of ${m.sets.length}`}
       >
         {m.sets.map((s, i) => (
-          <span key={i} className={s.done ? "done" : i === si ? "current" : ""}>
+          <span key={`${m.exerciseId}-${i}-${s.done}`} className={s.done ? "done" : i === si ? "current" : ""}>
             {s.done ? <Check size={13} /> : i + 1}
           </span>
         ))}
         <strong>
           Set {si + 1} of {m.sets.length}
         </strong>
+      </div>
+      <div className="exercise-win-slot" aria-live="polite" aria-atomic="true">
+        {feedback?.complete ? (
+          <div key={feedback.id} className="exercise-win">
+            <div className="exercise-win-marks" aria-hidden="true">
+              {Array.from({ length: feedback.count }, (_, i) => <span key={i} style={{ "--mark": i } as React.CSSProperties}><Check size={14} /></span>)}
+              <i><CheckCheck size={24} /></i>
+            </div>
+            <div><strong>Exercise complete</strong><span>{feedback.name}</span></div>
+          </div>
+        ) : <span className="sr-only">{feedback ? "Set saved. Next set ready." : ""}</span>}
+      </div>
       </div>
       <p className="quick-context">
         {last
@@ -297,11 +312,11 @@ export function SetLogger({
         </div>
       )}
       <button
-        className="lime-button quick-log"
+        className={"lime-button quick-log " + (feedback ? "quick-log-earned" : "")}
         disabled={!valid}
         onClick={onLog}
       >
-        <Check size={22} />
+        <span key={feedback?.id ?? "ready"} className={feedback ? "log-check-earned" : ""}><Check size={22} /></span>
         <span>
           {valid
             ? `Log ${ex.timed ? `${set.reps}s hold` : `${Number(set.weight) === 0 ? "bodyweight" : `${set.weight} kg`} × ${set.reps}`}`
@@ -321,7 +336,7 @@ export function SetLogger({
         )}
         {otherPending && (
           <button onClick={onLater}>
-            {partner ? "Do superset later" : "Do this later"}{" "}
+            {partner ? "Switch superset" : "Switch exercise"}{" "}
             <ArrowRight size={15} />
           </button>
         )}

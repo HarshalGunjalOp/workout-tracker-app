@@ -252,3 +252,40 @@ test("saved Tuesday neck extension is removed while flexion sets survive sync", 
   assert.deepEqual(mergeSessions([fixed], [session]), [fixed]);
   assert.deepEqual(mergeSessions([], [session])[0].movements, fixed.movements);
 });
+
+test("switching defers an exercise and automatic progression returns to it last", async () => {
+  const { workoutQueue, nextWorkoutFocus } = await import("../lib/training.ts");
+  const day = PLAN[0];
+  const session = makeSession(day, [], "queue", now);
+  const deferred = [day.exercises[0].id];
+  const firstId = session.movements[0].exerciseId;
+  assert.equal(workoutQueue(session, day, deferred).at(-1)?.id, day.exercises[0].id);
+  const next = nextWorkoutFocus(session, day, deferred);
+  assert.notEqual(next, 0);
+  // Continue the selected exercise until it is complete.
+  assert.equal(nextWorkoutFocus(session, day, deferred, session.movements[next].exerciseId), next);
+  session.movements.forEach((m, i) => { if (i !== 0) m.sets.forEach(s => { s.done = true; }); });
+  assert.equal(nextWorkoutFocus(session, day, deferred), 0);
+  session.movements[0].sets.forEach(s => { s.done = true; });
+  assert.equal(nextWorkoutFocus(session, day, deferred, firstId), -1);
+  assert.equal(workoutQueue(session, day, deferred).length, 0);
+});
+
+test("switching keeps supersets together and returns to their earliest unfinished round", async () => {
+  const { workoutQueue, nextWorkoutFocus, movementsFor } = await import("../lib/training.ts");
+  const day = PLAN.find(d => d.exercises.some(e => e.superset))!;
+  const ex = day.exercises.find(e => e.superset)!;
+  const session = makeSession(day, [], "pair-queue", now);
+  const parts = movementsFor(ex);
+  const a = session.movements.findIndex(m => m.exerciseId === parts[0].id);
+  const b = session.movements.findIndex(m => m.exerciseId === parts[1].id);
+  session.movements[a].sets[0].done = true;
+  assert.equal(nextWorkoutFocus(session, day, [], parts[0].id), b);
+  assert.notEqual(nextWorkoutFocus(session, day, [ex.id]), a);
+  assert.notEqual(nextWorkoutFocus(session, day, [ex.id]), b);
+  session.movements.forEach((m, i) => { if (i !== a && i !== b) m.sets.forEach(s => { s.done = true; }); });
+  assert.equal(workoutQueue(session, day, [ex.id]).length, 1);
+  assert.equal(nextWorkoutFocus(session, day, [ex.id]), b);
+  const restored = JSON.parse(JSON.stringify({ session, deferred: [ex.id], focus: parts[0].id }));
+  assert.equal(nextWorkoutFocus(restored.session, day, restored.deferred, restored.focus), b);
+});

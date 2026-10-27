@@ -39,6 +39,7 @@ import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
 import { sessionSchema } from "@/lib/schema";
 import { SetLogger } from "./components/set-logger";
 import {
+  nextWorkoutFocus,
   makeSession,
   movementsFor,
   supersetFocus,
@@ -143,6 +144,21 @@ export default function Home() {
     const timer = setTimeout(() => setCelebration(null), 2600);
     return () => clearTimeout(timer);
   }, [celebration]);
+  const [deferred, setDeferred] = useState<string[]>([]);
+  const [setFeedback, setSetFeedback] = useState<{
+    id: number; name: string; complete: boolean; count: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!setFeedback) return;
+    const timer = setTimeout(() => setSetFeedback(null), 2200);
+    return () => clearTimeout(timer);
+  }, [setFeedback]);
+  const loggerRef = useRef<HTMLDivElement>(null);
+  function revealNextExercise() {
+    requestAnimationFrame(() => loggerRef.current?.scrollIntoView({
+      block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    }));
+  }
   const lastLogTime = useRef(0);
   const synced = useRef<Record<string, string>>({}),
     current = useRef(sessions),
@@ -164,14 +180,9 @@ export default function Home() {
         if (Array.isArray(data.sessions)) {
           setSessions(mergeSessions(data.sessions, []));
           setActiveId(data.activeId ?? null);
-          setExpanded(
-            data.sessions
-              .find((s: Session) => s.id === data.activeId)
-              ?.movements.find(
-                (m: Session["movements"][number]) =>
-                  !m.sets.every((a) => a.done),
-              )?.exerciseId ?? null,
-          );
+          const focus = data.focus?.sessionId === data.activeId ? data.focus : null;
+          setExpanded(typeof focus?.exerciseId === "string" ? focus.exerciseId : null);
+          setDeferred(Array.isArray(focus?.deferred) ? focus.deferred.filter((id: unknown) => typeof id === "string") : []);
           setRestEnd(data.restEnd ?? null);
         }
         setSound(data.sound !== false);
@@ -201,13 +212,13 @@ export default function Home() {
     try {
       localStorage.setItem(
         storage,
-        JSON.stringify({ sessions, activeId, restEnd, sound }),
+        JSON.stringify({ sessions, activeId, restEnd, sound, focus: { sessionId: activeId, exerciseId: expanded, deferred } }),
       );
       setSaveError(false);
     } catch {
       setSaveError(true);
     }
-  }, [sessions, activeId, loaded, restEnd, sound]);
+  }, [sessions, activeId, loaded, restEnd, sound, expanded, deferred]);
   useEffect(() => {
     if (!loaded) return;
     let cancelled = false;
@@ -443,6 +454,8 @@ export default function Home() {
       crypto.randomUUID(),
       new Date().toISOString(),
     );
+    setDeferred([]);
+    setSetFeedback(null);
     setSessions((old) => [s, ...old]);
     setActiveId(s.id);
     setExpanded(s.movements[0].exerciseId);
@@ -506,7 +519,8 @@ export default function Home() {
       );
       const pr = isRecord(sessions, active!, mi, si, !!ex.timed);
       const movementComplete = active!.movements[mi].sets.every((s, i) => s.done || i === si);
-      setCelebration({ id: Date.now(), pr, name: pr ? "NEW PR" : !hasRemaining ? "WORKOUT COMPLETE" : movementComplete ? "EXERCISE COMPLETE" : "SET BANKED" });
+      if (pr || !hasRemaining) setCelebration({ id: Date.now(), pr, name: pr ? "NEW PR" : "WORKOUT COMPLETE" });
+      setSetFeedback({ id: Date.now(), name: active!.movements[mi].name, complete: movementComplete, count: active!.movements[mi].sets.length });
     }
   }
 
@@ -577,7 +591,7 @@ export default function Home() {
   const candidateMi =
     selectedMi >= 0
       ? selectedMi
-      : (active?.movements.findIndex((m) => m.sets.some((s) => !s.done)) ?? -1);
+      : (active ? nextWorkoutFocus(active, day, deferred) : -1);
   const candidateEx = day.exercises.find(
     (e) =>
       e.id === active?.movements[candidateMi]?.exerciseId ||
@@ -811,8 +825,10 @@ export default function Home() {
                 <span className="warmup-time">5 MIN</span>
               </button>
             </details>
+            <div ref={loggerRef} className="logger-anchor">
             <SetLogger
               session={active}
+              feedback={setFeedback}
               mi={focusMi}
               ex={focusEx}
               previous={
@@ -847,16 +863,10 @@ export default function Home() {
                         },
                   ),
                 };
-                const pairedMi = supersetFocus(logged, focusEx, focusMi);
-                const next = logged.movements[pairedMi]?.sets.some(
-                  (s) => !s.done,
-                )
-                  ? logged.movements[pairedMi]
-                  : (logged.movements.find(
-                      (m, i) => i > focusMi && m.sets.some((s) => !s.done),
-                    ) ??
-                    logged.movements.find((m) => m.sets.some((s) => !s.done)));
-                setExpanded(next?.exerciseId ?? null);
+                const nextMi = nextWorkoutFocus(logged, day, deferred, focusMovement?.exerciseId);
+                setExpanded(logged.movements[nextMi]?.exerciseId ?? null);
+                if (nextMi !== focusMi) revealNextExercise();
+
               }}
               onUndo={() => {
                 if (!lastLogged || !canUndo) return;
@@ -876,30 +886,19 @@ export default function Home() {
                 setExpanded(active.movements[lastLogged.mi].exerciseId);
                 setRestEnd(null);
                 setLastLogged(null);
+                setSetFeedback(null);
+                setCelebration(null);
                 showNotice("Last set undone. Adjust it and log again.");
               }}
               onLater={() => {
-                const next =
-                  active.movements.find(
-                    (m, i) =>
-                      i > focusMi &&
-                      !movementsFor(focusEx!).some(
-                        (part) => part.id === m.exerciseId,
-                      ) &&
-                      m.sets.some((s) => !s.done),
-                  ) ??
-                  active.movements.find(
-                    (m, i) =>
-                      i !== focusMi &&
-                      !movementsFor(focusEx!).some(
-                        (part) => part.id === m.exerciseId,
-                      ) &&
-                      m.sets.some((s) => !s.done),
-                  );
-                if (next) setExpanded(next.exerciseId);
-                showNotice(
-                  "We’ll return to your unfinished sets before you finish.",
-                );
+                if (!focusEx) return;
+                const nextDeferred = [...deferred.filter(id => id !== focusEx.id), focusEx.id];
+                const nextMi = nextWorkoutFocus(active, day, nextDeferred);
+                if (nextMi < 0 || nextMi === focusMi) return;
+                revealNextExercise();
+                setDeferred(nextDeferred);
+                setExpanded(active.movements[nextMi].exerciseId);
+                setSetFeedback(null);
               }}
               onRestMore={() =>
                 setRestEnd((end) => Math.max(end ?? 0, Date.now()) + 15000)
@@ -912,6 +911,7 @@ export default function Home() {
                 }
               }}
             />
+            </div>
             <details className="workout-details">
               <summary>
                 <LayoutGrid size={18} /> Workout overview & edits{" "}
