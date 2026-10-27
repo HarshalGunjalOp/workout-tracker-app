@@ -787,56 +787,14 @@ export default function Home() {
           </div>
         ) : active ? (
           <main className="content workout-content">
-            <div className="workout-heading">
-              <button
-                className="text-button"
-                onClick={() => {
-                  setActiveId(null);
-                }}
-              >
-                <ChevronLeft size={17} /> Back to overview
-              </button>
-              <span className="live-label">
-                <span /> IN SESSION ·{" "}
-                {clock(
-                  Math.floor(
-                    ((active.finishedAt
-                      ? new Date(active.finishedAt).getTime()
-                      : now) -
-                      new Date(active.startedAt).getTime()) /
-                      1000,
-                  ),
-                )}
-              </span>
+            <div className="session-toolbar">
+              <button className="icon-button" aria-label="Back to overview" onClick={() => setActiveId(null)}><ChevronLeft size={20} /></button>
+              <div className="session-toolbar-title"><h1>{day.title}</h1><span>{clock(Math.floor(((active.finishedAt ? new Date(active.finishedAt).getTime() : now) - new Date(active.startedAt).getTime()) / 1000))} elapsed</span></div>
+              <button className="text-button session-finish" onClick={() => setFinishPrompt(true)}>Finish <CheckCheck size={16} /></button>
             </div>
-            <div className="page-heading session-heading">
-              <div>
-                <div className="eyebrow">
-                  {day.day.toUpperCase()} / {day.label.toUpperCase()}
-                </div>
-                <h1>
-                  {day.title}
-                  <span className="lime-period">.</span>
-                </h1>
-                <p>{day.focus}</p>
-              </div>
-              <button
-                className="dark-button"
-                onClick={() => setFinishPrompt(true)}
-              >
-                Finish <CheckCheck size={18} />
-              </button>
-            </div>
-            <div ref={progressRef} className="earned-progress" aria-label={`${done} sets completed`}>
-              <span className="earned-icon"><Flame size={22} /></span>
-              <div><strong>{done ? `${done} sets banked` : "One set. Build from there."}</strong>
-                <div className="earned-dots" aria-hidden="true">
-                  {(active.movements[focusMi] ?? active.movements.at(-1))?.sets.map((s, i) => <i key={`${focusMi}-${i}`} className={s.done ? "earned" : ""} />)}
-                </div>
-              </div>
-              <span className="earned-checks" aria-label={`${active.movements.filter(m => m.sets.every(s => s.done)).length} exercises completed`}>
-                {active.movements.filter(m => m.sets.every(s => s.done)).map(m => <CheckCheck key={m.exerciseId} size={18} />)}
-              </span>
+            <div ref={progressRef} className="session-progress" aria-label={`${done} of ${total} sets completed`}>
+              <div className="session-progress-track" aria-hidden="true"><span style={{ width: `${done / Math.max(1, total) * 100}%` }} /></div>
+              <span>{done} / {total} sets</span>
             </div>
             <details
               className={

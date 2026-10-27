@@ -150,6 +150,7 @@ export function SetLogger({
         <CheckCheck size={36} />
         <h2>Every set, done.</h2>
         <p>Your workout is ready to save.</p>
+        <div className="set-action-dock">
         <button className="lime-button quick-log" onClick={onReview}>
           Save workout <CheckCheck size={20} />
         </button>
@@ -158,6 +159,7 @@ export function SetLogger({
             <RotateCcw size={16} /> Undo last set
           </button>
         )}
+        </div>
       </section>
     );
   const partner = supersetPartner(session, ex, mi);
@@ -174,8 +176,9 @@ export function SetLogger({
       movement.exerciseId !== partner?.exerciseId &&
       movement.sets.some((s) => !s.done),
   );
+  const restingNow = resting && seconds > 0;
   return (
-    <section className={"quick-logger " + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
+    <section className={"quick-logger " + (restingNow ? "is-resting " : "") + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
       <div className="quick-overline">
         <span>
           {resting && seconds > 0 ? "RESTING · NEXT UP" : "YOUR NEXT SET"}
@@ -184,6 +187,17 @@ export function SetLogger({
           EXERCISE {mi + 1} / {session.movements.length}
         </span>
       </div>
+      {resting && (
+      <div className={"rest-stage " + (restingNow ? "running" : "")} aria-label="Rest timer">
+        <div className="rest-stage-heading"><Timer size={16} /><span>{restingNow ? "RECOVER" : "READY WHEN YOU ARE"}</span></div>
+        <strong className="rest-stage-clock" role="timer" aria-label={restingNow ? `${seconds} seconds remaining` : "Rest complete"}>{restingNow ? clock(seconds) : "Ready"}</strong>
+        <p>Next: {ex.timed ? `${set.reps}s hold` : `${set.weight === "" ? "Choose weight" : Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`} × ${set.reps}`}</p>
+        <div className="rest-stage-controls">
+          <button onClick={onRestMore}>+15s</button>
+          <button onClick={onRestSkip}>End rest</button>
+        </div>
+      </div>
+      )}
       {partner && (
         <div className="superset-guide">
           <strong>
@@ -301,25 +315,7 @@ export function SetLogger({
       <p className="quick-memory">
         Changes carry to your remaining sets. Just log when you’re done.
       </p>
-      {resting && (
-        <div className={"quick-rest " + (seconds === 0 ? "ready" : "")}>
-          <Timer size={20} />
-          <div>
-            <strong>{seconds > 0 ? clock(seconds) : "Ready"}</strong>
-            <span>
-              {seconds > 0
-                ? "Rest · next set is prepared"
-                : "Rest complete · go when ready"}
-            </span>
-          </div>
-          {seconds > 0 && (
-            <>
-              <button onClick={onRestMore}>+15s</button>
-              <button onClick={onRestSkip}>Skip</button>
-            </>
-          )}
-        </div>
-      )}
+      <div className="set-action-dock">
       <button
         className="lime-button quick-log"
         disabled={!valid}
@@ -347,6 +343,7 @@ export function SetLogger({
             <ArrowRight size={15} />
           </button>
         )}
+      </div>
       </div>
       <details className="quick-cue">
         <summary>
