@@ -14,7 +14,11 @@ export function createJournalSync(options: Options) {
   const acknowledged = new Map<string, string>();
   let running = false, queued = false, stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const signature = (session: Session) => JSON.stringify(session);
+  const signature = (session: Session) => JSON.stringify(session, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
+      : value,
+  );
   async function request(path: string, init?: RequestInit): Promise<Response> {
     const send = () => options.fetch(path, { ...init, cache: "no-store", signal: AbortSignal.timeout(15000) });
     let response = await send();

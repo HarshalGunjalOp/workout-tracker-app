@@ -87,3 +87,10 @@ test('a sync requested while another pass is running is automatically drained',a
   assert.equal(f.statuses.at(-1),'Synced');
  }finally{f.engine.stop();}
 });
+
+test('JSONB key ordering does not cause redundant uploads of saved sessions',async()=>{
+ const f=fixture([session('monday')]);
+ const reordered=JSON.parse(JSON.stringify(session('monday')),(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).reverse()):value);
+ f.database.set('monday',reordered);
+ try{await f.engine.flush();assert.equal(f.writes.length,0);assert.equal(f.statuses.at(-1),'Synced');}finally{f.engine.stop();}
+});
