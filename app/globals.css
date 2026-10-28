@@ -3997,10 +3997,11 @@ svg {
 .exercise-win div > span { display:block; margin-top:3px; font-size:12px; color:var(--theme-muted, #5d6d50); }
 .exercise-win-marks { display:flex; position:relative; align-items:center; justify-content:center; min-width:48px; height:42px; }
 .exercise-win-marks > span { display:grid; place-items:center; position:absolute; width:23px; height:23px; border-radius:50%; background:#d9ff65; color:#38551f; animation:marks-merge .6s both; animation-delay:calc(var(--mark) * 35ms); }
-.exercise-win-marks > i { display:grid; place-items:center; width:40px; height:40px; border-radius:50%; color:#fff; background:#527a28; animation:win-check .7s both; }
+.exercise-win-marks > i { display:grid; place-items:center; width:32px; height:32px; border-radius:50%; color:#fff; background:#527a28; animation:win-check .7s both; }
 .next-exercise-title { animation:next-exercise-enter .3s ease-out; }
 .quick-set-progress .done { animation:set-marker-fill .35s ease-out; }
 .quick-footer button { min-height:44px; }
+.exercise-win-marks > i > svg { width:20px; height:20px; }
 @keyframes exercise-win-enter { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
 @keyframes marks-merge { 0% { opacity:1; transform:translateX(calc((var(--mark) - 1) * 14px)) scale(.8); } 70% { opacity:1; transform:translateX(0) scale(1); } 100% { opacity:0; transform:scale(.4); } }
 @keyframes win-check { 0%,45% { opacity:0; transform:scale(.5); } 80% { opacity:1; transform:scale(1.12); } 100% { opacity:1; transform:scale(1); } }
