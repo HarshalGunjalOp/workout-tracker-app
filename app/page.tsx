@@ -37,6 +37,7 @@ import {
   Moon,
 } from "lucide-react";
 import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
+import { createJournalSync } from "@/lib/journal-sync";
 import { sessionSchema } from "@/lib/schema";
 import { SetLogger } from "./components/set-logger";
 import { ProgressDashboard } from "./components/progress-dashboard";
@@ -196,13 +197,11 @@ export default function Home() {
     }));
   }
   const lastLogTime = useRef(0);
-  const synced = useRef<Record<string, string>>({}),
-    current = useRef(sessions),
+  const journalSync = useRef<ReturnType<typeof createJournalSync> | null>(null);
+  const current = useRef(sessions),
     fileRef = useRef<HTMLInputElement>(null),
     audioRef = useRef<AudioContext | null>(null),
-    restWasRunning = useRef(false),
-    syncBusy = useRef(false),
-    hydratedRemote = useRef(false);
+    restWasRunning = useRef(false);
   current.current = sessions;
   const active = sessions.find((s) => s.id === activeId),
     history = sessions.filter((s) => s.finishedAt && !s.discardedAt),
@@ -257,118 +256,59 @@ export default function Home() {
   }, [sessions, activeId, loaded, restEnd, sound, expanded, deferred]);
   useEffect(() => {
     if (!loaded) return;
-    let cancelled = false;
-    async function init() {
-      try {
-        const params = new URLSearchParams(location.hash.slice(1));
-        const key = params.get("key");
-        if (key) {
-          const res = await fetch("/api/pair", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ key }),
+    const params = new URLSearchParams(location.hash.slice(1));
+    const linkKey = params.get("key");
+    let linkPaired = !linkKey;
+    const engine = createJournalSync({
+      read: () => current.current,
+      write: (merged) => { current.current = merged; setSessions(merged); },
+      status: setSync,
+      key: () => {
+        if (linkKey) return linkKey;
+        try { return localStorage.getItem("form-device-key"); } catch { return null; }
+      },
+      fetch: async (path, init) => {
+        if (!linkPaired && path === "/api/sessions") {
+          const pair = await fetch("/api/pair", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: linkKey }), signal: AbortSignal.timeout(15000),
           });
-          if (res.ok) {
-            localStorage.setItem("form-device-key", key);
-            window.history.replaceState(null, "", location.pathname);
-            showNotice(
-              "This device is connected. Your training comes with you.",
-            );
-          } else
-            showNotice(
-              "That device link could not connect. Local logging still works.",
-            );
+          if (!pair.ok) return pair;
+          linkPaired = true;
+          try { localStorage.setItem("form-device-key", linkKey!); } catch {}
+          window.history.replaceState(null, "", location.pathname);
         }
-        const res = await fetch("/api/sessions");
-        if (!res.ok) {
-          setSync(res.status === 401 ? "Device only" : "Offline");
-          return;
+        const response = await fetch(path, init);
+        if (path === "/api/pair" && response.ok && linkKey) {
+          try { localStorage.setItem("form-device-key", linkKey); } catch {}
+          window.history.replaceState(null, "", location.pathname);
         }
-        const remote: Session[] = await res.json();
-        remote.forEach((s) => (synced.current[s.id] = s.updatedAt));
-        if (!cancelled) {
-          setSessions((old) => mergeSessions(old, remote));
-          hydratedRemote.current = true;
-          setSync("Synced");
-        }
-      } catch {
-        setSync("Offline");
-      }
-    }
-    init();
-    return () => {
-      cancelled = true;
-    };
-  }, [loaded, showNotice]);
-  useEffect(() => {
-    if (!loaded) return;
-    const t = setTimeout(async () => {
-      if (syncBusy.current) return;
-      syncBusy.current = true;
-      try {
-        if (!navigator.onLine) {
-          setSync("Offline");
-          return;
-        }
-        if (!hydratedRemote.current) {
-          const res = await fetch("/api/sessions");
-          if (!res.ok) {
-            setSync(res.status === 401 ? "Device only" : "Offline");
-            return;
-          }
-          const remote: Session[] = await res.json();
-          remote.forEach((s) => (synced.current[s.id] = s.updatedAt));
-          hydratedRemote.current = true;
-          setSessions((old) => mergeSessions(old, remote));
-          return;
-        }
-        const pending = current.current.filter(
-          (s) => synced.current[s.id] !== s.updatedAt,
-        );
-        if (pending.length) setSync("Saving");
-        for (const s of pending) {
-          const res = await fetch("/api/sessions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(s),
-          });
-          if (!res.ok) {
-            if (res.status === 409) {
-              hydratedRemote.current = false;
-              showNotice("Another device has a newer copy. Syncing it now.");
-              setSyncTick((v) => v + 1);
-            }
-            setSync(res.status === 401 ? "Device only" : "Offline");
-            return;
-          }
-          synced.current[s.id] = s.updatedAt;
-        }
-        setSync("Synced");
-      } catch {
-        setSync("Offline");
-      } finally {
-        syncBusy.current = false;
-      }
-    }, 800);
-    return () => clearTimeout(t);
-  }, [sessions, loaded, syncTick, showNotice]);
-  useEffect(() => {
-    const tick = () => {
-      hydratedRemote.current = false;
-      setSyncTick((t) => t + 1);
-    };
-    const focus = () => {
+        return response;
+      },
+    });
+    journalSync.current = engine;
+    void engine.flush();
+    const tick = () => engine.schedule(0);
+    const visibility = () => {
       if (document.visibilityState === "visible") tick();
+      else void engine.flush();
     };
-    document.addEventListener("visibilitychange", focus);
+    document.addEventListener("visibilitychange", visibility);
     window.addEventListener("online", tick);
+    window.addEventListener("pageshow", tick);
     const id = setInterval(tick, 30000);
     return () => {
+      engine.stop();
+      journalSync.current = null;
       window.removeEventListener("online", tick);
-      document.removeEventListener("visibilitychange", focus);
+      window.removeEventListener("pageshow", tick);
+      document.removeEventListener("visibilitychange", visibility);
       clearInterval(id);
     };
-  }, []);
+  }, [loaded]);
+  useEffect(() => {
+    if (loaded) journalSync.current?.schedule();
+  }, [sessions, loaded, syncTick]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -745,9 +685,9 @@ export default function Home() {
               onClick={() => {
                 setSyncTick((t) => t + 1);
                 showNotice(
-                  sync === "Synced"
-                    ? "All workouts are backed up to Neon."
-                    : "Your workouts are saved on this device. Retrying cloud sync.",
+                  sync === "Device only"
+                    ? "Open your private device link to reconnect. Your workouts are safe on this device."
+                    : "Checking cloud backup and uploading any pending workouts.",
                 );
               }}
             >
