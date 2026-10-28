@@ -5,6 +5,8 @@ A personal, phone-first workout journal for Harshal’s five-day V-taper program
 ## Training
 
 - All five prescribed training days, every exercise, rep range, rest interval and form cue.
+- Program → open a day → Edit workout to customize names, descriptions, warm-ups, duration, sets, rep/hold ranges, rest and coaching notes. Add, remove or reorder exercises. Saved changes apply to future sessions; existing sessions retain their plan snapshot.
+- Program edits save on device, sync across paired devices per workout, and are included in JSON backups.
 - Paired exercises have separate logs. Vacuum holds use seconds.
 - Focused next-set logging with a thumb-reachable Log button on phones. Weight/reps start from completed history (or prescribed reps), and changes carry into the remaining unfinished sets of that movement.
 - Tap +/- or a rep shortcut instead of typing, with configurable weight increments and a bodyweight shortcut. One-tap undo, automatic next exercise and rest timer, optional sound/haptics, and screen wake lock where supported.
@@ -24,7 +26,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Use a separate Neon development branch for local testing. Production project: `purple-scene-46556222`, database `form`, region Singapore. Migrations are in `schema.sql`.
+Use a separate Neon development branch for local testing. Production project: `purple-scene-46556222`, database `form`, region Singapore. Migrations are in `schema.sql`. Apply it before running this version: the program editor requires the new `workout_program_days` table as well as `workout_sessions`.
 
 Set `DATABASE_URL` to the pooled Neon URL. Generate `OWNER_KEY` with a cryptographically secure 32-byte random generator. Never commit either value.
 

@@ -1,5 +1,5 @@
 import { Activity, ArrowUpRight, Dumbbell, Layers, Trophy } from "lucide-react";
-import { PLAN } from "@/lib/plan";
+import { PLAN, type Day } from "@/lib/plan";
 import {
   canProgress,
   completedSets,
@@ -20,7 +20,7 @@ const shortDate = (iso: string) =>
     timeZone: "Asia/Kolkata",
   });
 
-export function ProgressDashboard({ history }: { history: Session[] }) {
+export function ProgressDashboard({ history, plan = PLAN }: { history: Session[]; plan?: Day[] }) {
   const ordered = [...history].sort((a, b) =>
     a.startedAt.localeCompare(b.startedAt),
   );
@@ -34,7 +34,7 @@ export function ProgressDashboard({ history }: { history: Session[] }) {
     return { key, count, label: shortDate(day.toISOString()) };
   });
   const activeDays = days.filter((d) => d.count > 0).length;
-  const milestones = PLAN.flatMap((day) =>
+  const milestones = plan.flatMap((day) =>
     day.exercises.flatMap((ex) => {
       if (ex.timed) return [];
       return movementsFor(ex).flatMap((movement) => {

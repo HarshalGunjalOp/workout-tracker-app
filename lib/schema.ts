@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { programDaySchema } from "./program.ts";
 export const sessionSchema = z.object({
   id: z.uuid(),
+  programDay: programDaySchema.optional(),
   dayId: z.enum(["upper", "lower-a", "push", "pull", "lower-b"]),
   startedAt: z.iso.datetime(),
   finishedAt: z.iso.datetime().nullable(),

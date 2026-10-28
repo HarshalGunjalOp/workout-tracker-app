@@ -9,6 +9,7 @@ export type MovementLog = {
 export type Session = {
   id: string;
   dayId: string;
+  programDay?: Day;
   startedAt: string;
   finishedAt: string | null;
   discardedAt?: string;
@@ -32,6 +33,7 @@ export function makeSession(
   return {
     id,
     dayId: day.id,
+    programDay: structuredClone(day),
     startedAt: now,
     finishedAt: null,
     updatedAt: now,
@@ -50,7 +52,8 @@ export function makeSession(
               : completed?.at(-1);
             return {
               weight: ex.timed ? "" : (target?.weight ?? ""),
-              reps: target?.reps || String(ex.min),
+              reps: target?.reps && Number(target.reps) >= ex.min && Number(target.reps) <= ex.max
+                ? target.reps : String(ex.min),
               done: false,
             };
           }),
@@ -109,7 +112,9 @@ export const completedSets = (s: Session) =>
   s.movements.reduce((a, m) => a + m.sets.filter((s) => s.done).length, 0);
 export const volume = (s: Session) =>
   s.movements
-    .filter((m) => m.exerciseId !== "vacuum")
+    .filter((m) => s.programDay
+      ? !s.programDay.exercises.some(ex => ex.timed && movementsFor(ex).some(part => part.id === m.exerciseId))
+      : m.exerciseId !== "vacuum")
     .reduce(
       (a, m) =>
         a +

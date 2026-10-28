@@ -39,6 +39,9 @@ import {
 import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
 import { createJournalSync } from "@/lib/journal-sync";
 import { sessionSchema } from "@/lib/schema";
+import { ProgramEditor } from "./components/program-editor";
+import { useProgram } from "./components/use-program";
+import { savedProgramSchema } from "@/lib/program";
 import { SetLogger } from "./components/set-logger";
 import { ProgressDashboard } from "./components/progress-dashboard";
 import {
@@ -136,6 +139,9 @@ export default function Home() {
     [warmup, setWarmup] = useState(false),
     [saveError, setSaveError] = useState(false),
     [syncTick, setSyncTick] = useState(0);
+  const program = useProgram(loaded);
+  const [editingDay, setEditingDay] = useState<Day | null>(null);
+  const selectedDay = program.plan.find(d => d.id === selected.id) ?? selected;
   const [darkMode, setDarkMode] = useState(false);
   useEffect(() => {
     const update = () => {
@@ -205,7 +211,7 @@ export default function Home() {
   current.current = sessions;
   const active = sessions.find((s) => s.id === activeId),
     history = sessions.filter((s) => s.finishedAt && !s.discardedAt),
-    day = PLAN.find((d) => d.id === active?.dayId) ?? selected;
+    day = active?.programDay ?? (active ? PLAN.find((d) => d.id === active.dayId) : selectedDay) ?? selectedDay;
   const showNotice = useCallback((s: string) => setNotice(s), []);
   useEffect(() => {
     try {
@@ -319,19 +325,20 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [notice]);
   useEffect(() => {
-    if (!(settings || detail || summary || finishPrompt)) return;
+    if (!(settings || detail || summary || finishPrompt || editingDay)) return;
     const previous = document.activeElement as HTMLElement | null;
     const dialog = document.querySelector<HTMLElement>("[role=dialog]");
     const focusable = () =>
       Array.from(
         dialog?.querySelectorAll<HTMLElement>(
-          'button:not([disabled]),input:not([hidden]),textarea,[tabindex="0"]',
+          'button:not([disabled]),input:not([hidden]),textarea,select,[tabindex="0"]',
         ) ?? [],
       );
     focusable()[0]?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSettings(false);
+        setEditingDay(null);
         setDetail(null);
         setSummary(null);
         setFinishPrompt(false);
@@ -357,7 +364,7 @@ export default function Home() {
       document.body.style.overflow = overflow;
       previous?.focus();
     };
-  }, [settings, detail, summary, finishPrompt]);
+  }, [settings, detail, summary, finishPrompt, editingDay]);
   const seconds = restEnd ? Math.max(0, Math.ceil((restEnd - now) / 1000)) : 0;
   useEffect(() => {
     if (restEnd && seconds > 0) restWasRunning.current = true;
@@ -522,7 +529,7 @@ export default function Home() {
       new Blob(
         [
           JSON.stringify(
-            { version: 1, exportedAt: new Date().toISOString(), sessions },
+            { version: 1, exportedAt: new Date().toISOString(), sessions, program: program.saved },
             null,
             2,
           ),
@@ -1280,29 +1287,29 @@ export default function Home() {
                       <div className="hero-topline">
                         <span className="live-dot" /> NEXT UP{" "}
                         <span className="hero-day">
-                          {selected.day.toUpperCase()}
+                          {selectedDay.day.toUpperCase()}
                         </span>
                       </div>
                       <h2>
-                        {selected.id === "upper" ? (
+                        {selectedDay.id === "upper" ? (
                           <>
                             Build your
                             <br />
                             upper frame.
                           </>
-                        ) : selected.id === "lower-a" ? (
+                        ) : selectedDay.id === "lower-a" ? (
                           <>
                             Strength in
                             <br />
                             the details.
                           </>
-                        ) : selected.id === "push" ? (
+                        ) : selectedDay.id === "push" ? (
                           <>
                             Press toward
                             <br />
                             your next level.
                           </>
-                        ) : selected.id === "pull" ? (
+                        ) : selectedDay.id === "pull" ? (
                           <>
                             Build a<br />
                             wider back.
@@ -1316,22 +1323,22 @@ export default function Home() {
                         )}
                       </h2>
                       <p>
-                        {selected.title} <span>/</span> {selected.label}
+                        {selectedDay.title} <span>/</span> {selectedDay.label}
                       </p>
                       <div className="hero-meta">
                         <span>
                           <Dumbbell size={15} />
-                          {selected.exercises.length} exercises
+                          {selectedDay.exercises.length} exercises
                         </span>
                         <span>
                           <Timer size={15} />
-                          {selected.minutes} min
+                          {selectedDay.minutes} min
                         </span>
-                        <span>{totalSets(selected)} sets</span>
+                        <span>{totalSets(selectedDay)} sets</span>
                       </div>
                       <button
                         className="lime-button"
-                        onClick={() => start(selected)}
+                        onClick={() => start(selectedDay)}
                       >
                         {sessions.some((s) => !s.finishedAt && !s.discardedAt)
                           ? "Resume workout"
@@ -1437,13 +1444,13 @@ export default function Home() {
                   <div className="week-strip">
                     {[0, 1, 2, 3, 4, 5, 6].map((i) => {
                       const wd = i + 1 === 7 ? 0 : i + 1;
-                      const d = PLAN.find((d) => d.weekday === wd);
+                      const d = program.plan.find((d) => d.weekday === wd);
                       return d ? (
                         <button
                           key={i}
                           className={
                             "day-tile " +
-                            (selected.id === d.id ? "active-day" : "") +
+                            (selectedDay.id === d.id ? "active-day" : "") +
                             (weekDays.has(d.id) ? " day-finished" : "")
                           }
                           onClick={() => setSelected(d)}
@@ -1452,11 +1459,11 @@ export default function Home() {
                             <span>{d.short}</span>
                             {weekDays.has(d.id) ? (
                               <Check size={15} />
-                            ) : selected.id === d.id ? (
+                            ) : selectedDay.id === d.id ? (
                               <span className="day-dot" />
                             ) : (
                               <span className="day-index">
-                                0{PLAN.indexOf(d) + 1}
+                                0{program.plan.indexOf(d) + 1}
                               </span>
                             )}
                           </div>
@@ -1466,12 +1473,12 @@ export default function Home() {
                             exercises
                           </small>
                           <div className="tile-bottom">
-                            {selected.id === d.id
+                            {selectedDay.id === d.id
                               ? "SELECTED"
                               : weekDays.has(d.id)
                                 ? "COMPLETED"
                                 : d.label.toUpperCase()}
-                            {selected.id === d.id && <ArrowUpRight size={14} />}
+                            {selectedDay.id === d.id && <ArrowUpRight size={14} />}
                           </div>
                         </button>
                       ) : (
@@ -1500,16 +1507,16 @@ export default function Home() {
                       <div>
                         <div className="eyebrow">A LOOK INSIDE</div>
                         <h2>
-                          {selected.title}
+                          {selectedDay.title}
                           <span>.</span>
                         </h2>
                       </div>
                       <span className="subtle-pill">
-                        {totalSets(selected)} working sets
+                        {totalSets(selectedDay)} working sets
                       </span>
                     </div>
                     <div className="exercise-preview">
-                      {selected.exercises.slice(0, 4).map((ex, i) => (
+                      {selectedDay.exercises.slice(0, 4).map((ex, i) => (
                         <div key={ex.id}>
                           <span className="preview-index">0{i + 1}</span>
                           <span className="preview-icon">
@@ -1535,10 +1542,10 @@ export default function Home() {
                       className="preview-more"
                       onClick={() => {
                         setTab("program");
-                        setExpanded(selected.id);
+                        setExpanded(selectedDay.id);
                       }}
                     >
-                      View all {selected.exercises.length} exercises{" "}
+                      View all {selectedDay.exercises.length} exercises{" "}
                       <ArrowRight size={16} />
                     </button>
                   </section>
@@ -1581,7 +1588,7 @@ export default function Home() {
                     </h1>
                     <p>Five days. A clear purpose for every set.</p>
                   </div>
-                  <span className="plan-badge">5-DAY SPLIT · 65–75 MIN</span>
+                  <span className="plan-badge">5-DAY SPLIT · YOUR PROGRAM</span>
                 </div>
                 <div className="program-intro">
                   <Target size={23} />
@@ -1599,8 +1606,9 @@ export default function Home() {
                     <small>TEMPO GUIDE</small>
                   </span>
                 </div>
+                <p className="footnote" role="status">Program: {program.status}</p>
                 <div className="program-list">
-                  {PLAN.map((d, i) => (
+                  {program.plan.map((d, i) => (
                     <section className="program-card" key={d.id}>
                       <button
                         className="program-header"
@@ -1626,6 +1634,10 @@ export default function Home() {
                       </button>
                       {expanded === d.id && (
                         <div className="program-body">
+                          <div className="program-edit-heading">
+                            <p>{d.label}</p>
+                            <button className="outline-button" onClick={() => setEditingDay(d)}><NotebookPen size={16} /> Edit workout</button>
+                          </div>
                           <p className="program-warmup">
                             <Flame size={17} />
                             {d.warmup}
@@ -1718,7 +1730,7 @@ export default function Home() {
                           </span>
                           <span className="history-title">
                             <strong>
-                              {PLAN.find((d) => d.id === s.dayId)?.title}
+                              {s.programDay?.title ?? PLAN.find((d) => d.id === s.dayId)?.title}
                             </strong>
                             <small>
                               {completedSets(s)} sets <span>·</span>{" "}
@@ -1736,7 +1748,7 @@ export default function Home() {
                 )}
               </>
             )}
-            {tab === "progress" && <ProgressDashboard history={history} />}
+            {tab === "progress" && <ProgressDashboard history={history} plan={program.plan} />}
             <footer className="page-footer">
               <span>
                 FORM<span className="lime-period">.</span>{" "}
@@ -1774,6 +1786,13 @@ export default function Home() {
           </button>
         </div>
       )}
+      {editingDay && <ProgramEditor day={editingDay} onClose={() => setEditingDay(null)} onSave={day => {
+        try {
+          program.save(day);
+          setEditingDay(null);
+          showNotice("Program saved. Your next workout will use these changes.");
+        } catch { showNotice("Could not save program. Free up device storage and try again."); }
+      }} />}
       {settings && (
         <div className="modal-backdrop" onClick={() => setSettings(false)}>
           <section
@@ -1876,6 +1895,11 @@ export default function Home() {
                     )
                   )
                     throw Error();
+                  if (data.program !== undefined) {
+                    const parsed = savedProgramSchema.safeParse(data.program);
+                    if (!parsed.success) throw Error();
+                    program.restore(parsed.data);
+                  }
                   setSessions((old) => mergeSessions(old, data.sessions));
                   showNotice("Backup restored. Your training is all here.");
                 } catch {
@@ -2036,7 +2060,7 @@ export default function Home() {
               when you walked in<span>.</span>
             </h2>
             <p>
-              {PLAN.find((d) => d.id === summary.dayId)?.title} ·{" "}
+              {summary.programDay?.title ?? PLAN.find((d) => d.id === summary.dayId)?.title} ·{" "}
               {date(summary.startedAt)}
             </p>
             <div className="summary-stats">
@@ -2097,7 +2121,7 @@ export default function Home() {
               }).toUpperCase()}
             </div>
             <h2>
-              {PLAN.find((d) => d.id === detail.dayId)?.title}
+              {detail.programDay?.title ?? PLAN.find((d) => d.id === detail.dayId)?.title}
               <span>.</span>
             </h2>
             <p>
@@ -2112,7 +2136,7 @@ export default function Home() {
                     .filter((s) => s.done)
                     .map((s, i) => (
                       <span key={i}>
-                        {m.exerciseId === "vacuum"
+                        {(detail.programDay ? detail.programDay.exercises.some(ex => ex.timed && movementsFor(ex).some(part => part.id === m.exerciseId)) : m.exerciseId === "vacuum")
                           ? `${s.reps}s`
                           : `${s.weight || "0"} kg × ${s.reps}`}
                       </span>
