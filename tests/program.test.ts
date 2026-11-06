@@ -61,3 +61,17 @@ test("custom timed holds do not count toward volume and legacy sessions remain v
   delete session.programDay;
   assert.ok(sessionSchema.safeParse(session).success);
 });
+
+test("weight increments survive program sync, backups and session snapshots", () => {
+  const day = structuredClone(PLAN[0]);
+  day.exercises[0].weightStep = 1.25;
+  const saved = savedProgramSchema.parse([{ day, updatedAt: later }]);
+  const resolved = resolveProgram(mergeProgram([], saved))[0];
+  assert.equal(resolved.exercises[0].weightStep, 1.25);
+  const session = makeSession(resolved, [], crypto.randomUUID(), later);
+  assert.equal(sessionSchema.parse(session).programDay?.exercises[0].weightStep, 1.25);
+  for (const value of [0, -1, 101, NaN]) {
+    day.exercises[0].weightStep = value;
+    assert.equal(programDaySchema.safeParse(day).success, false);
+  }
+});

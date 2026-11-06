@@ -4293,3 +4293,27 @@ svg {
 @media (max-width: 600px) {
   .program-editor form > .program-fields > label { grid-column: 1 / -1; }
 }
+
+.exercise-navigation { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin-bottom:20px; }
+.exercise-navigation button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:44px; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); font-weight:650; }
+.exercise-navigation button:disabled { opacity:.35; cursor:default; }
+.exercise-navigation > span { color:var(--muted); font-size:12px; white-space:nowrap; }
+.set-picker { display:flex; flex-wrap:wrap; gap:8px; width:100%; margin:16px 0 8px; }
+.set-picker button { flex:1 1 86px; min-height:56px; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--ink); text-align:left; }
+.set-picker strong { display:flex; align-items:center; gap:4px; font-size:12px; }
+.set-picker span { display:block; margin-top:5px; font-size:12px; color:var(--muted); }
+.set-picker .current, .set-picker [aria-pressed="true"] { border-color:var(--ink); }
+.set-picker .done { background:var(--accent-soft, #eef1e3); }
+.set-edit-hint, .weight-step-label { font-size:11px; color:var(--muted); line-height:1.5; }
+.inline-set-editor { width:100%; text-align:left; }
+.inline-set-editor p { font-size:13px; color:var(--muted); }
+.inline-set-editor label { display:block; margin:16px 0; font-size:13px; }
+.inline-set-editor input { display:block; width:100%; min-height:48px; margin-top:6px; padding:10px; background:var(--paper); color:var(--ink); border:1px solid var(--line); border-radius:8px; font-size:20px; }
+.inline-edit-actions { display:flex; gap:12px; margin-top:20px; }
+.inline-edit-actions button { flex:1; min-height:48px; }
+:root[data-theme="dark"] .set-picker .done { background:var(--bg); }
+
+.focused-set-progress .exercise-win-slot { position:static; }
+.focused-set-progress .exercise-win { height:auto; margin-top:12px; }
+
+@media (max-width:700px) { .set-picker { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  ArrowLeft,
   ArrowRight,
   Check,
   CheckCheck,
@@ -10,6 +11,7 @@ import {
   RotateCcw,
   Timer,
 } from "lucide-react";
+import { readWeightSteps } from "@/lib/weight-steps";
 import type { Exercise } from "@/lib/plan";
 import {
   supersetPartner,
@@ -64,6 +66,7 @@ function Stepper({
           type="text"
           inputMode={unit === "kg" ? "decimal" : "numeric"}
           value={value}
+          style={value.length > 4 ? { fontSize: `${Math.max(12, 32 - value.length * 2)}px` } : undefined}
           placeholder="—"
           maxLength={unit === "kg" ? 8 : 5}
           onFocus={(e) => e.target.select()}
@@ -92,7 +95,9 @@ export function SetLogger({
   onChange,
   onLog,
   onUndo,
-  onLater,
+  onNavigate,
+  onEdit,
+  weightIncrement,
   onRestMore,
   onRestSkip,
   onReview,
@@ -108,60 +113,55 @@ export function SetLogger({
   onChange: (field: "weight" | "reps", value: string) => void;
   onLog: () => void;
   onUndo: () => void;
-  onLater: () => void;
+  onNavigate: (offset: number) => void;
+  onEdit: (si: number, weight: string, reps: string) => void;
+  weightIncrement?: number;
   onRestMore: () => void;
   onRestSkip: () => void;
   onReview: () => void;
 }) {
   const [weightSteps, setWeightSteps] = useState<Record<string, number>>({});
-  useEffect(() => {
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem("form-weight-steps-v1") ?? "{}");
-      if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-        setWeightSteps(Object.fromEntries(Object.entries(saved).filter(
-          ([, step]) => typeof step === "number" && [1.25, 2.5, 5].includes(step),
-        )));
-      }
-    } catch {}
-  }, []);
+  const [editing, setEditing] = useState<number | null>(null);
+  useEffect(() => { setWeightSteps(readWeightSteps()); }, []);
   const exerciseId = session.movements[mi]?.exerciseId;
-  const weightStep = (exerciseId && weightSteps[exerciseId]) || 2.5;
-  const hasWeightStep = !!exerciseId && Object.hasOwn(weightSteps, exerciseId);
-  function chooseWeightStep(step: number) {
-    if (!exerciseId) return;
-    const next = { ...weightSteps, [exerciseId]: step };
-    setWeightSteps(next);
-    try {
-      localStorage.setItem("form-weight-steps-v1", JSON.stringify(next));
-    } catch {}
-  }
+  const weightStep = weightIncrement ?? ex?.weightStep ?? (exerciseId ? weightSteps[exerciseId] : undefined) ?? 2.5;
   const m = session.movements[mi];
   const si = m?.sets.findIndex((s) => !s.done) ?? -1;
   const set = m?.sets[si];
   const allDone = session.movements.every((movement) =>
     movement.sets.every((s) => s.done),
   );
-  if (!set || !ex || allDone)
-    return (
-      <section
-        className="quick-logger quick-complete"
-        aria-label="Workout complete"
-      >
-        <CheckCheck size={36} />
-        <h2>Every set, done.</h2>
-        <p>Your workout is ready to save.</p>
-        <div className="set-action-dock">
-        <button className="lime-button quick-log" onClick={onReview}>
-          Save workout <CheckCheck size={20} />
-        </button>
-        {canUndo && (
-          <button className="quick-undo" onClick={onUndo}>
-            <RotateCcw size={16} /> Undo last set
-          </button>
-        )}
-        </div>
-      </section>
-    );
+  if (!m || !ex) return null;
+  const navigation = (
+    <nav className="exercise-navigation" aria-label="Exercise navigation">
+      <button disabled={mi === 0} onClick={() => onNavigate(-1)}><ArrowLeft size={18} /> Previous</button>
+      <span>{mi + 1} / {session.movements.length}</span>
+      <button disabled={mi === session.movements.length - 1} onClick={() => onNavigate(1)}>Next <ArrowRight size={18} /></button>
+    </nav>
+  );
+  const setPicker = (
+    <div className="set-picker" role="group" aria-label="Sets — tap to edit">
+      {m.sets.map((s, i) => <button key={i} className={s.done ? "done" : i === si ? "current" : ""} aria-label={`Edit ${m.name} set ${i + 1}${s.done ? ", logged" : ""}`} aria-pressed={editing === i} onClick={() => setEditing(i)}>
+        <strong>{s.done && <Check size={14} />} Set {i + 1}</strong>
+        <span>{ex.timed ? `${s.reps}s` : `${s.weight === "" ? "—" : s.weight + " kg"} × ${s.reps}`}</span>
+      </button>)}
+    </div>
+  );
+  if (editing !== null) return (
+    <section className="quick-logger" aria-label="Edit set">
+      {navigation}<h2>{m.name}</h2>{setPicker}
+      <InlineSetEditor key={editing} set={m.sets[editing]} si={editing} timed={!!ex.timed} onCancel={() => setEditing(null)} onSave={(weight, reps) => { onEdit(editing, weight, reps); setEditing(null); }} />
+    </section>
+  );
+  if (!set) return (
+    <section className="quick-logger quick-complete" aria-label={allDone ? "Workout complete" : "Exercise complete"}>
+      {navigation}<CheckCheck size={36} /><h2>{m.name}</h2>
+      <p>{allDone ? "Every set, done. Your workout is ready to save." : "Exercise complete. Tap a set to correct it, or move to another exercise."}</p>
+      {setPicker}
+      {allDone && <div className="set-action-dock"><button className="lime-button quick-log" onClick={onReview}>Save workout <CheckCheck size={20} /></button></div>}
+      {canUndo && <button className="quick-undo" onClick={onUndo}><RotateCcw size={16} /> Undo last set</button>}
+    </section>
+  );
   const partner = supersetPartner(session, ex, mi);
   const partnerNext = partner?.sets[si] && !partner.sets[si].done;
   const last = previous?.sets[si]?.done
@@ -170,15 +170,10 @@ export function SetLogger({
   const valid =
     Number(set.reps) > 0 &&
     (ex.timed || (set.weight !== "" && Number.isFinite(Number(set.weight))));
-  const otherPending = session.movements.some(
-    (movement, i) =>
-      i !== mi &&
-      movement.exerciseId !== partner?.exerciseId &&
-      movement.sets.some((s) => !s.done),
-  );
   const restingNow = resting && seconds > 0;
   return (
     <section className={"quick-logger " + (restingNow ? "is-resting " : "") + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
+      {navigation}
       <div className="quick-overline">
         <span>
           {resting && seconds > 0 ? "RESTING · NEXT UP" : "YOUR NEXT SET"}
@@ -215,20 +210,9 @@ export function SetLogger({
             : `Then rest ${ex.rest}s${si + 1 < m.sets.length ? " · next round follows automatically" : " · superset complete"}`}
         </p>
       )}
-      <div className="exercise-progress-slot">
-      <div
-        className="quick-set-progress"
-        aria-label={`Set ${si + 1} of ${m.sets.length}`}
-      >
-        {m.sets.map((s, i) => (
-          <span key={`${m.exerciseId}-${i}-${s.done}`} className={s.done ? "done" : i === si ? "current" : ""}>
-            {s.done ? <Check size={13} /> : i + 1}
-          </span>
-        ))}
-        <strong>
-          Set {si + 1} of {m.sets.length}
-        </strong>
-      </div>
+      <div className="focused-set-progress">
+      {setPicker}
+      <p className="set-edit-hint">Tap any set to edit its weight or {ex.timed ? "duration" : "reps"}.</p>
       <div className="exercise-win-slot" aria-live="polite" aria-atomic="true">
         {feedback?.complete ? (
           <div key={feedback.id} className="exercise-win">
@@ -270,22 +254,7 @@ export function SetLogger({
       </div>
       {!ex.timed && (
         <div className="quick-shortcuts">
-          {!hasWeightStep && <div
-            className="weight-steps"
-            role="group"
-            aria-label="Weight adjustment size"
-          >
-            <span>KG STEP</span>
-            {[1.25, 2.5, 5].map((n) => (
-              <button
-                key={n}
-                aria-pressed={weightStep === n}
-                onClick={() => chooseWeightStep(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>}
+          <span className="weight-step-label">+/− {weightStep} kg · change in Program → Edit workout</span>
           <button
             className="bodyweight-shortcut"
             aria-pressed={set.weight === "0"}
@@ -337,12 +306,6 @@ export function SetLogger({
         ) : (
           <span>Saved automatically</span>
         )}
-        {otherPending && (
-          <button onClick={onLater}>
-            {partner ? "Switch superset" : "Switch exercise"}{" "}
-            <ArrowRight size={15} />
-          </button>
-        )}
       </div>
       </div>
       <details className="quick-cue">
@@ -354,4 +317,21 @@ export function SetLogger({
       </details>
     </section>
   );
+}
+
+function InlineSetEditor({ set, si, timed, onSave, onCancel }: {
+  set: { weight: string; reps: string; done: boolean }; si: number; timed: boolean;
+  onSave: (weight: string, reps: string) => void; onCancel: () => void;
+}) {
+  const [weight, setWeight] = useState(set.weight);
+  const [reps, setReps] = useState(set.reps);
+  const valid = /^\d+$/.test(reps) && reps.length <= 5 && Number(reps) > 0 &&
+    (timed || (weight !== "" && /^\d*(\.\d*)?$/.test(weight) && weight.length <= 8 && Number.isFinite(Number(weight))));
+  return <form className="inline-set-editor" onSubmit={e => { e.preventDefault(); if (valid) onSave(weight, reps); }}>
+    <h3>Edit set {si + 1}</h3>
+    <p>Changes apply only to this set. {set.done ? "It stays logged." : "It stays unlogged."}</p>
+    {!timed && <label>Weight (kg)<input autoFocus inputMode="decimal" value={weight} maxLength={8} onFocus={e => e.target.select()} onChange={e => setWeight(e.target.value)} /></label>}
+    <label>{timed ? "Duration (seconds)" : "Reps"}<input autoFocus={timed} inputMode="numeric" value={reps} maxLength={5} onFocus={e => e.target.select()} onChange={e => setReps(e.target.value)} /></label>
+    <div className="inline-edit-actions"><button type="button" className="outline-button" onClick={onCancel}>Cancel</button><button className="lime-button" disabled={!valid}>Save set</button></div>
+  </form>;
 }

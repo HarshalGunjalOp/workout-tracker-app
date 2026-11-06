@@ -7,6 +7,7 @@ export type Exercise = {
   max: number;
   rest: number;
   cue: string;
+  weightStep?: number;
   timed?: boolean;
   superset?: boolean;
 };

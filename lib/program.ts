@@ -20,6 +20,7 @@ export const programDaySchema = z.object({
     max: z.number().int().min(1).max(99999),
     rest: z.number().int().min(0).max(1800),
     cue: z.string().trim().max(2000),
+    weightStep: z.number().min(0.01).max(100).optional(),
     timed: z.boolean().optional(),
     superset: z.boolean().optional(),
   }).refine(ex => ex.max >= ex.min, "Maximum must be at least the minimum.")

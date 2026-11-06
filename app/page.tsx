@@ -569,12 +569,12 @@ export default function Home() {
       : 0;
   const selectedMi =
     active?.movements.findIndex(
-      (m) => m.exerciseId === expanded && m.sets.some((s) => !s.done),
+      (m) => m.exerciseId === expanded,
     ) ?? -1;
   const candidateMi =
     selectedMi >= 0
       ? selectedMi
-      : (active ? nextWorkoutFocus(active, day, deferred) : -1);
+      : (active ? Math.max(0, nextWorkoutFocus(active, day, deferred)) : -1);
   const candidateEx = day.exercises.find(
     (e) =>
       e.id === active?.movements[candidateMi]?.exerciseId ||
@@ -583,7 +583,7 @@ export default function Home() {
           (m) => m.id === active?.movements[candidateMi]?.exerciseId,
         )),
   );
-  const focusMi = active ? supersetFocus(active, candidateEx, candidateMi) : -1;
+  const focusMi = selectedMi >= 0 ? selectedMi : active ? supersetFocus(active, candidateEx, candidateMi) : -1;
   const focusMovement = active?.movements[focusMi];
   const focusEx = day.exercises.find(
     (e) =>
@@ -768,6 +768,18 @@ export default function Home() {
             </details>
             <div className="logger-anchor">
             <SetLogger
+              key={`${active.id}-${focusMovement?.exerciseId}`}
+              weightIncrement={program.plan.find(d => d.id === active.dayId)?.exercises.find(e => e.id === focusEx?.id)?.weightStep}
+              onNavigate={(offset) => {
+                const nextMi = focusMi + offset;
+                if (nextMi < 0 || nextMi >= active.movements.length) return;
+                setExpanded(active.movements[nextMi].exerciseId);
+                setSetFeedback(null);
+              }}
+              onEdit={(si, weight, reps) => {
+                update(s => editSet(editSet(s, focusMi, si, "weight", weight), focusMi, si, "reps", reps));
+                showNotice("Set updated.");
+              }}
               session={active}
               feedback={setFeedback}
               mi={focusMi}
@@ -830,16 +842,6 @@ export default function Home() {
                 setSetFeedback(null);
                 setCelebration(null);
                 showNotice("Last set undone. Adjust it and log again.");
-              }}
-              onLater={() => {
-                if (!focusEx) return;
-                const nextDeferred = [...deferred.filter(id => id !== focusEx.id), focusEx.id];
-                const nextMi = nextWorkoutFocus(active, day, nextDeferred);
-                if (nextMi < 0 || nextMi === focusMi) return;
-                revealNextExercise();
-                setDeferred(nextDeferred);
-                setExpanded(active.movements[nextMi].exerciseId);
-                setSetFeedback(null);
               }}
               onRestMore={() =>
                 setRestEnd((end) => Math.max(end ?? 0, Date.now()) + 15000)
@@ -1790,7 +1792,7 @@ export default function Home() {
         try {
           program.save(day);
           setEditingDay(null);
-          showNotice("Program saved. Your next workout will use these changes.");
+          showNotice("Program saved. Weight increments update now; other changes apply to your next workout.");
         } catch { showNotice("Could not save program. Free up device storage and try again."); }
       }} />}
       {settings && (

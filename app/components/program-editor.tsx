@@ -2,12 +2,18 @@
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { type Day, type Exercise } from "@/lib/plan";
+import { readWeightSteps } from "@/lib/weight-steps";
 import { programDaySchema } from "@/lib/program";
 
 export function ProgramEditor({ day, onSave, onClose }: {
   day: Day; onSave: (day: Day) => void; onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<Day>(() => structuredClone(day));
+  const [draft, setDraft] = useState<Day>(() => {
+    const draft = structuredClone(day);
+    const legacy = readWeightSteps();
+    draft.exercises = draft.exercises.map(ex => ({ ...ex, weightStep: ex.weightStep ?? legacy[ex.id] ?? legacy[ex.id + "-a"] ?? 2.5 }));
+    return draft;
+  });
   const [error, setError] = useState("");
   function exercise(id: string, patch: Partial<Exercise>) {
     setDraft(old => ({ ...old, exercises: old.exercises.map(ex => ex.id === id ? { ...ex, ...patch } : ex) }));
@@ -25,6 +31,7 @@ export function ProgramEditor({ day, onSave, onClose }: {
       <div className="eyebrow">MAKE IT YOURS · {day.day.toUpperCase()}</div>
       <h2 id="program-editor-title">Edit workout<span>.</span></h2>
       <p>Changes apply to future workouts. Your current session and history stay as logged.</p>
+      <p>Weight increments also update the +/− buttons in your current workout.</p>
       <form onSubmit={event => {
         event.preventDefault();
         const result = programDaySchema.safeParse(draft);
@@ -52,6 +59,7 @@ export function ProgramEditor({ day, onSave, onClose }: {
           <div className="program-fields">
             <label className="program-wide">Exercise name<input required maxLength={150} value={ex.name} onChange={e => exercise(ex.id, { name: e.target.value })} />{ex.superset && <small>Use “First movement + Second movement”. Each is logged separately.</small>}</label>
             <label className="program-wide">Muscles<input maxLength={200} value={ex.muscle} onChange={e => exercise(ex.id, { muscle: e.target.value })} /></label>
+            {!ex.timed && <label>Weight increment (kg)<input required type="number" min={0.01} max={100} step="0.01" value={ex.weightStep || ""} onChange={e => exercise(ex.id, { weightStep: Number(e.target.value) })} /><small>Amount added or removed with +/−.</small></label>}
             <label>Sets<input required type="number" min={1} max={20} value={ex.sets || ""} onChange={e => exercise(ex.id, { sets: Number(e.target.value) })} /></label>
             <label>Rest (seconds)<input required type="number" min={0} max={1800} value={ex.rest} onChange={e => exercise(ex.id, { rest: Number(e.target.value) })} /></label>
             <label>Minimum {ex.timed ? "seconds" : "reps"}<input required type="number" min={1} max={99999} value={ex.min || ""} onChange={e => exercise(ex.id, { min: Number(e.target.value) })} /></label>
@@ -61,7 +69,7 @@ export function ProgramEditor({ day, onSave, onClose }: {
           {!ex.superset && <label className="program-unit">Measure targets in<select value={ex.timed ? "seconds" : "reps"} onChange={event => exercise(ex.id, { timed: event.target.value === "seconds" })}><option value="reps">Reps</option><option value="seconds">Seconds (timed hold)</option></select></label>}
         </fieldset>)}
         <button type="button" className="outline-button" disabled={draft.exercises.reduce((n, ex) => n + (ex.superset ? 2 : 1), 0) >= 30} onClick={() => setDraft({ ...draft, exercises: [...draft.exercises, {
-          id: `custom-${crypto.randomUUID()}`, name: "New exercise", muscle: "", sets: 3, min: 8, max: 12, rest: 60, cue: "",
+          id: `custom-${crypto.randomUUID()}`, name: "New exercise", muscle: "", sets: 3, min: 8, max: 12, rest: 60, cue: "", weightStep: 2.5,
         }] })}><Plus size={17} /> Add exercise</button>
         {error && <p className="program-error" role="alert">{error}</p>}
         <div className="program-editor-footer">
