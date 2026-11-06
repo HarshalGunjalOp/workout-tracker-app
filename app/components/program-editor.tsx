@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { type Day, type Exercise } from "@/lib/plan";
 import { readWeightSteps } from "@/lib/weight-steps";
@@ -8,13 +8,38 @@ import { programDaySchema } from "@/lib/program";
 export function ProgramEditor({ day, onSave, onClose }: {
   day: Day; onSave: (day: Day) => void; onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<Day>(() => {
+  const [initialDraft] = useState<Day>(() => {
     const draft = structuredClone(day);
     const legacy = readWeightSteps();
     draft.exercises = draft.exercises.map(ex => ({ ...ex, weightStep: ex.weightStep ?? legacy[ex.id] ?? legacy[ex.id + "-a"] ?? 2.5 }));
     return draft;
   });
+  const [draft, setDraft] = useState(initialDraft);
   const [error, setError] = useState("");
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
+  function requestClose() {
+    if (!dirty || window.confirm("Discard unsaved workout changes? Choose Cancel to keep editing.")) onClose();
+  }
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    // Handle Escape before the shared modal handler can close the editor.
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (window.confirm("Discard unsaved workout changes? Choose Cancel to keep editing.")) onClose();
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("keydown", escape, true);
+    };
+  }, [dirty, onClose]);
   function exercise(id: string, patch: Partial<Exercise>) {
     setDraft(old => ({ ...old, exercises: old.exercises.map(ex => ex.id === id ? { ...ex, ...patch } : ex) }));
   }
@@ -27,7 +52,7 @@ export function ProgramEditor({ day, onSave, onClose }: {
   }
   return <div className="modal-backdrop">
     <section className="modal program-editor" role="dialog" aria-modal="true" aria-labelledby="program-editor-title">
-      <button className="modal-close icon-button" aria-label="Close program editor" onClick={onClose}><X size={21} /></button>
+      <button className="modal-close icon-button" aria-label="Close program editor" onClick={requestClose}><X size={21} /></button>
       <div className="eyebrow">MAKE IT YOURS · {day.day.toUpperCase()}</div>
       <h2 id="program-editor-title">Edit workout<span>.</span></h2>
       <p>Changes apply to future workouts. Your current session and history stay as logged.</p>
@@ -73,7 +98,7 @@ export function ProgramEditor({ day, onSave, onClose }: {
         }] })}><Plus size={17} /> Add exercise</button>
         {error && <p className="program-error" role="alert">{error}</p>}
         <div className="program-editor-footer">
-          <button type="button" className="outline-button" onClick={onClose}>Cancel</button>
+          <button type="button" className="outline-button" onClick={requestClose}>Cancel</button>
           <button type="submit" className="lime-button">Save workout</button>
         </div>
       </form>

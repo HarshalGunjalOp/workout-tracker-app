@@ -6,6 +6,7 @@ A personal, phone-first workout journal for Harshal’s five-day V-taper program
 
 - All five prescribed training days, every exercise, rep range, rest interval and form cue.
 - Program → open a day → Edit workout to customize names, descriptions, warm-ups, duration, sets, rep/hold ranges, rest, weight increments and coaching notes. Weight increments also apply immediately to the current session. Add, remove or reorder exercises. Saved changes apply to future sessions; existing sessions retain their plan snapshot.
+- Unsaved program edits ask before Close, Cancel or Escape discards them; the browser also warns before refresh or leaving the page.
 - Program edits save on device, sync across paired devices per workout, and are included in JSON backups.
 - Paired exercises have separate logs. Vacuum holds use seconds.
 - Focused next-set logging with a thumb-reachable Log button on phones. Weight/reps start from completed history (or prescribed reps), and changes carry into the remaining unfinished sets of that movement.
