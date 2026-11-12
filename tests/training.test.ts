@@ -239,6 +239,28 @@ test("records require history and beat load then reps, with ties excluded", asyn
   assert.equal(isRecord([prior], current, 0, 0, true), true);
 });
 
+test("each PR compares with the latest completed log for that set number", async () => {
+  const { isRecord } = await import("../lib/records.ts");
+  const older = makeSession(PLAN[0], [], "older", "2026-10-12T10:00:00.000Z");
+  older.finishedAt = older.startedAt;
+  older.movements[0].sets[1] = { weight: "20", reps: "14", done: true };
+  const last = makeSession(PLAN[0], [], "last", "2026-10-19T10:00:00.000Z");
+  last.finishedAt = last.startedAt;
+  last.movements[0].sets[0] = { weight: "20", reps: "12", done: true };
+  last.movements[0].sets[1] = { weight: "20", reps: "9", done: true };
+  last.movements[0].sets[2] = { weight: "20", reps: "11", done: false };
+  const current = makeSession(PLAN[0], [], "current", now);
+  current.movements[0].sets[0] = { weight: "20", reps: "13", done: true };
+  current.movements[0].sets[1] = { weight: "20", reps: "10", done: true };
+  current.movements[0].sets[2] = { weight: "20", reps: "12", done: true };
+
+  assert.equal(isRecord([older, last, current], current, 0, 0), true);
+  assert.equal(isRecord([older, last, current], current, 0, 1), true);
+  assert.equal(isRecord([older, last, current], current, 0, 2), false);
+  current.movements[0].sets[1].reps = "9";
+  assert.equal(isRecord([older, last], current, 0, 1), false);
+});
+
 test("saved Tuesday neck extension is removed while flexion sets survive sync", () => {
   const session = makeSession(PLAN[1], [], "old-tuesday", now);
   const flexion = session.movements.find((m) => m.exerciseId === "neck-flex")!;

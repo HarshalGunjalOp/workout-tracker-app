@@ -8,11 +8,12 @@ export function isRecord(sessions: Session[], session: Session, mi: number, si: 
     ? Number(a.reps) > Number(b.reps)
     : Number(a.weight) > Number(b.weight) ||
       (Number(a.weight) === Number(b.weight) && Number(a.reps) > Number(b.reps));
-  const prior = sessions.filter(s => !s.discardedAt && s.id !== session.id && s.finishedAt)
+  if (Number(candidate.reps) <= 0) return false;
+  const previous = sessions
+    .filter(s => s.finishedAt && !s.discardedAt && s.id !== session.id && s.startedAt <= session.startedAt)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
     .flatMap(s => s.movements.filter(m => m.exerciseId === movement.exerciseId))
-    .flatMap(m => m.sets.filter(s => s.done));
-  // A first session establishes a baseline, rather than inventing a record.
-  if (!prior.length || Number(candidate.reps) <= 0) return false;
-  const earlier = movement.sets.slice(0, si).filter(s => s.done);
-  return [...prior, ...earlier].every(s => better(candidate, s));
+    .map(m => m.sets[si])
+    .find(set => set?.done);
+  return previous !== undefined && better(candidate, previous);
 }
