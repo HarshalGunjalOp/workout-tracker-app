@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createJournalSync } from '../lib/journal-sync.ts';
-import type { Session } from '../lib/training.ts';
+import { PLAN } from '../lib/plan.ts';
+import { sessionSchema } from '../lib/schema.ts';
+import { makeSession, type Session } from '../lib/training.ts';
 const session = (id: string): Session => ({id, dayId:'upper', startedAt:'2026-10-26T09:00:00.000Z',finishedAt:'2026-10-26T10:00:00.000Z',updatedAt:'2026-10-26T10:00:00.000Z',note:'',movements:[]});
 function fixture(initial: Session[]) {
   let local = structuredClone(initial), authenticated = true;
@@ -93,4 +95,54 @@ test('JSONB key ordering does not cause redundant uploads of saved sessions',asy
  const reordered=JSON.parse(JSON.stringify(session('monday')),(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).reverse()):value);
  f.database.set('monday',reordered);
  try{await f.engine.flush();assert.equal(f.writes.length,0);assert.equal(f.statuses.at(-1),'Synced');}finally{f.engine.stop();}
+});
+
+test('oversized and conflicting uploads do not block other workouts', async () => {
+  const f = fixture([session('oversized'), session('conflict'), session('completed')]);
+  f.intercept(async (_path, init) => {
+    if (init?.method !== 'POST') return undefined;
+    const { id } = JSON.parse(String(init.body));
+    if (id === 'oversized') return new Response(null, { status: 413 });
+    if (id === 'conflict') return new Response(null, { status: 409 });
+    return undefined;
+  });
+  try {
+    await f.engine.flush();
+    assert.deepEqual(f.writes, ['completed']);
+    assert.equal(f.local.length, 3);
+    assert.equal(f.statuses.at(-1), 'Some changes need attention');
+  } finally {
+    f.engine.stop();
+  }
+});
+
+test('large workouts use regular uploads so they fit the browser request limit', async () => {
+  const day = {
+    ...PLAN[0],
+    exercises: Array.from({ length: 24 }, (_, index) => ({
+      ...PLAN[0].exercises[0],
+      id: `exercise-${index}`,
+      cue: 'a'.repeat(2_000),
+    })),
+  };
+  const large = makeSession(day, [], crypto.randomUUID(), '2026-10-26T09:00:00.000Z');
+  large.finishedAt = large.updatedAt;
+  for (const movement of large.movements) movement.note = 'a'.repeat(1_000);
+  assert.ok(sessionSchema.safeParse(large).success);
+  const size = Buffer.byteLength(JSON.stringify(large));
+  assert.ok(size > 65_536 && size < 100_000);
+  const f = fixture([large]);
+  f.intercept(async (_path, init) => {
+    if (init?.keepalive && Buffer.byteLength(String(init.body)) > 65_536) {
+      throw new TypeError('Failed to fetch');
+    }
+    return undefined;
+  });
+  try {
+    await f.engine.flush();
+    assert.deepEqual(f.database.get(large.id), large);
+    assert.equal(f.statuses.at(-1), 'Synced');
+  } finally {
+    f.engine.stop();
+  }
 });

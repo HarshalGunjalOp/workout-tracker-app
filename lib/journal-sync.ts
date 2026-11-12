@@ -48,6 +48,7 @@ export function createJournalSync(options: Options) {
     if (timer) { clearTimeout(timer); timer = undefined; }
     running = true;
     let retry = false;
+    let rejected = false;
     options.status("Saving");
     try {
       const response = await request("/api/sessions");
@@ -70,20 +71,25 @@ export function createJournalSync(options: Options) {
         if (stopped) return;
         const saved = await request("/api/sessions", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(session), keepalive: true,
+          // The browser's keepalive quota is smaller than a valid workout.
+          body: JSON.stringify(session),
         });
         if (!saved.ok) {
           retry = true;
-          options.status(saved.status === 401 ? "Device only" : saved.status === 400 ? "Some changes need attention" : "Offline");
-          // A bad old draft must never block other completed workouts.
-          if (saved.status === 400) continue;
+          // A rejection for one workout must not hold up the rest of the journal.
+          if (saved.status === 400 || saved.status === 409 || saved.status === 413) {
+            rejected = true;
+            continue;
+          }
+          options.status(saved.status === 401 ? "Device only" : "Offline");
           return;
         }
         acknowledged.set(session.id, signature(session));
       }
       if (stopped) return;
       const remaining = options.read().some(s => acknowledged.get(s.id) !== signature(s));
-      if (!retry) options.status(remaining ? "Saving" : "Synced");
+      if (rejected) options.status("Some changes need attention");
+      else if (!retry) options.status(remaining ? "Saving" : "Synced");
       if (remaining && !retry) queued = true;
     } catch {
       if (!stopped) options.status("Offline");

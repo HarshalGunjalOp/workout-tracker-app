@@ -1709,10 +1709,15 @@ export default function Home() {
                 {!history.length ? (
                   <Empty
                     icon={CalendarDays}
-                    title="Your first chapter is unwritten."
+                    title={sync === "Synced" ? "Your first chapter is unwritten." : "No workouts on this device yet"}
                   >
-                    Finish a workout and it will land here, with every set, rep,
-                    and note ready for next time.
+                    {sync === "Connecting" || sync === "Saving"
+                      ? "Checking the cloud for your workouts…"
+                      : sync === "Device only"
+                        ? "Open your private device link on this browser to load your cloud history."
+                        : sync === "Offline"
+                          ? "Cloud history is unavailable right now. FORM will retry automatically."
+                          : "Finish a workout and it will land here, with every set, rep, and note ready for next time."}
                   </Empty>
                 ) : (
                   <div className="history-list">
