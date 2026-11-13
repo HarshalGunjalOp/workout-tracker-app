@@ -1,22 +1,14 @@
-import { cookies } from "next/headers";
-import { createHash, timingSafeEqual } from "node:crypto";
-export const hash = (s: string) => createHash("sha256").update(s).digest("hex");
-export async function owner(request: Request) {
-  const key = process.env.OWNER_KEY;
-  if (!key)
-    return process.env.NODE_ENV === "development" ? "local-development" : null;
-  const ownerHash = hash(key);
-  const token = (await cookies()).get("form-device")?.value;
-  if (token && safeEqual(token, ownerHash)) return ownerHash;
+import { createHash } from "node:crypto";
 
-  const credential = request.headers.get("authorization");
-  return credential && safeEqual(credential, `Bearer ${key}`) ? ownerHash : null;
+export function journalOwner() {
+  // The existing deployment key identifies the journal's stored rows.
+  const legacyKey = process.env.OWNER_KEY;
+  if (!legacyKey) {
+    return process.env.NODE_ENV === "development" ? "local-development" : null;
+  }
+  return createHash("sha256").update(legacyKey).digest("hex");
 }
-export function safeEqual(a: string, b: string) {
-  const aa = Buffer.from(a),
-    bb = Buffer.from(b);
-  return aa.length === bb.length && timingSafeEqual(aa, bb);
-}
+
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;

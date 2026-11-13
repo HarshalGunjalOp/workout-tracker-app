@@ -2,13 +2,12 @@ import { neon } from "@neondatabase/serverless";
 import { NextResponse } from "next/server";
 import { savedDaySchema } from "@/lib/program";
 import { LEGACY_DAY_IDS } from "@/lib/plan";
-import { owner, sameOrigin } from "@/lib/server";
+import { journalOwner, sameOrigin } from "@/lib/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const user = await owner(req);
-  if (!user) return NextResponse.json({ error: "Device is not connected." }, { status: 401 });
-  if (!process.env.DATABASE_URL) return NextResponse.json({ error: "Cloud is not configured." }, { status: 503 });
+  const user = journalOwner();
+  if (!user || !process.env.DATABASE_URL) return NextResponse.json({ error: "Cloud is not configured." }, { status: 503 });
   try {
     const sql = neon(process.env.DATABASE_URL);
     const includeNewPlan = new URL(req.url).searchParams.get("version") === "2";
@@ -22,9 +21,8 @@ export async function GET(req: Request) {
 }
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
-  const user = await owner(req);
-  if (!user) return NextResponse.json({ error: "Device is not connected." }, { status: 401 });
-  if (!process.env.DATABASE_URL) return NextResponse.json({ error: "Cloud is not configured." }, { status: 503 });
+  const user = journalOwner();
+  if (!user || !process.env.DATABASE_URL) return NextResponse.json({ error: "Cloud is not configured." }, { status: 503 });
   const raw = await req.text();
   if (raw.length > 1_048_576) return NextResponse.json({ error: "Request too large" }, { status: 413 });
   let parsed;

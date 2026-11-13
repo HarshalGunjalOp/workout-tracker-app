@@ -6,18 +6,15 @@ import { sessionSchema } from '../lib/schema.ts';
 import { makeSession, type Session } from '../lib/training.ts';
 const session = (id: string): Session => ({id, dayId:'upper', startedAt:'2026-10-26T09:00:00.000Z',finishedAt:'2026-10-26T10:00:00.000Z',updatedAt:'2026-10-26T10:00:00.000Z',note:'',movements:[]});
 function fixture(initial: Session[]) {
-  let local = structuredClone(initial), authenticated = true;
+  let local = structuredClone(initial);
   const database = new Map<string, Session>();
   const statuses: string[] = [], writes: string[] = [];
   let intercept: ((path:string, init?:RequestInit)=>Promise<Response | undefined>) | undefined;
   const engine = createJournalSync({
-    read:()=>local, write:s=>{local=s;}, status:s=>statuses.push(s), key:()=> 'saved-private-key',
+    read:()=>local, write:s=>{local=s;}, status:s=>statuses.push(s),
     fetch: (async (path,init)=>{
       const url=String(path);
       const custom=await intercept?.(url,init);if(custom)return custom;
-      if (!authenticated && new Headers(init?.headers).get('Authorization') !== 'Bearer saved-private-key') {
-        return new Response(null, { status: 401 });
-      }
       if(init?.method==='POST'){
         const value=JSON.parse(String(init.body));
         database.set(value.id,value);writes.push(value.id);
@@ -26,7 +23,7 @@ function fixture(initial: Session[]) {
       return Response.json([...database.values()]);
     }) as typeof fetch,
   });
-  return {engine,database,statuses,writes, get local(){return local;},set local(s){local=s;},loseCookie(){authenticated=false;},intercept(fn:typeof intercept){intercept=fn;}};
+  return {engine,database,statuses,writes, get local(){return local;},set local(s){local=s;},intercept(fn:typeof intercept){intercept=fn;}};
 }
 
 test('uploads both missing completed sessions before reporting Synced', async()=>{
@@ -35,9 +32,17 @@ test('uploads both missing completed sessions before reporting Synced', async()=
   try { await f.engine.flush(); assert.equal(f.database.size,2);assert.equal(f.statuses.at(-1),'Synced'); }
   finally {f.engine.stop();}
 });
-test('a device with a blocked cookie uses its saved credential to upload',async()=>{
-  const f=fixture([session('monday')]);f.loseCookie();
-  try {await f.engine.flush();assert.equal(f.database.size,1);assert.equal(f.statuses.at(-1),'Synced');}finally{f.engine.stop();}
+test('a fresh browser downloads the journal without any device setup', async () => {
+  const f = fixture([]);
+  const saved = session('monday');
+  f.database.set(saved.id, saved);
+  try {
+    await f.engine.flush();
+    assert.deepEqual(f.local, [saved]);
+    assert.equal(f.statuses.at(-1), 'Synced');
+  } finally {
+    f.engine.stop();
+  }
 });
 test('offline failure retains local data and a later retry uploads it',async()=>{
   const f=fixture([session('monday')]);f.intercept(async()=>{throw Error('offline');});

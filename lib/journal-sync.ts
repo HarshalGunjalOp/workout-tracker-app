@@ -1,11 +1,10 @@
-import { deviceRequest } from "./device-sync.ts";
+import { syncRequest } from "./sync-request.ts";
 import { mergeSessions, type Session } from "./training.ts";
 
 type Options = {
   read: () => Session[];
   write: (sessions: Session[]) => void;
   status: (status: string) => void;
-  key: () => string | null;
   fetch: typeof fetch;
 };
 
@@ -37,9 +36,9 @@ export function createJournalSync(options: Options) {
     let rejected = false;
     options.status("Saving");
     try {
-      const response = await deviceRequest(options.fetch, options.key, "/api/sessions");
+      const response = await syncRequest(options.fetch, "/api/sessions");
       if (!response.ok) {
-        options.status(response.status === 401 ? "Device only" : "Offline");
+        options.status("Cloud sync pending");
         retry = true;
         return;
       }
@@ -55,7 +54,7 @@ export function createJournalSync(options: Options) {
         .sort((a, b) => Number(!!b.finishedAt && !b.discardedAt) - Number(!!a.finishedAt && !a.discardedAt));
       for (const session of pending) {
         if (stopped) return;
-        const saved = await deviceRequest(options.fetch, options.key, "/api/sessions", {
+        const saved = await syncRequest(options.fetch, "/api/sessions", {
           method: "POST", headers: { "Content-Type": "application/json" },
           // The browser's keepalive quota is smaller than a valid workout.
           body: JSON.stringify(session),
@@ -67,7 +66,7 @@ export function createJournalSync(options: Options) {
             rejected = true;
             continue;
           }
-          options.status(saved.status === 401 ? "Device only" : "Offline");
+          options.status("Cloud sync pending");
           return;
         }
         const { session: stored } = await saved.json() as { session?: Session };

@@ -1,17 +1,12 @@
 import { neon } from "@neondatabase/serverless";
 import { NextResponse } from "next/server";
 import { sessionSchema } from "@/lib/schema";
-import { owner, sameOrigin } from "@/lib/server";
+import { journalOwner, sameOrigin } from "@/lib/server";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const user = await owner(req);
-  if (!user)
-    return NextResponse.json(
-      { error: "Open your personal device link to connect." },
-      { status: 401 },
-    );
-  if (!process.env.DATABASE_URL)
+export async function GET() {
+  const user = journalOwner();
+  if (!user || !process.env.DATABASE_URL)
     return NextResponse.json(
       { error: "Cloud storage is not configured." },
       { status: 503 },
@@ -34,13 +29,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!sameOrigin(req))
     return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
-  const user = await owner(req);
-  if (!user)
-    return NextResponse.json(
-      { error: "Device is not connected." },
-      { status: 401 },
-    );
-  if (!process.env.DATABASE_URL)
+  const user = journalOwner();
+  if (!user || !process.env.DATABASE_URL)
     return NextResponse.json(
       { error: "Cloud storage is not configured." },
       { status: 503 },

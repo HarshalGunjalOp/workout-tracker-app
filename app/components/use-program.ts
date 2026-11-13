@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { mergeProgram, resolveProgram, savedProgramSchema, savedDaySchema, type SavedDay } from "@/lib/program";
-import { deviceRequest, savedDeviceKey } from "@/lib/device-sync";
+import { syncRequest } from "@/lib/sync-request";
 import type { Day } from "@/lib/plan";
 const key = "form-program-v2";
 
-export function useProgram(loaded: boolean, connectionVersion: number) {
+export function useProgram(loaded: boolean) {
   const [saved, setSaved] = useState<SavedDay[]>([]);
   const [status, setStatus] = useState("Connecting");
   const [ready, setReady] = useState(false);
@@ -31,8 +31,8 @@ export function useProgram(loaded: boolean, connectionVersion: number) {
       running = true;
       setStatus("Saving");
       try {
-        const response = await deviceRequest(fetch, savedDeviceKey, "/api/program?version=2");
-        if (!response.ok) throw Error(response.status === 401 ? "Device only" : "Saved on device · cloud retry pending");
+        const response = await syncRequest(fetch, "/api/program?version=2");
+        if (!response.ok) throw Error("Cloud sync pending");
         const remote = savedProgramSchema.parse(await response.json());
         const merged = mergeProgram(current.current, remote);
         // Persist the merged copy before acknowledging it in the UI.
@@ -41,7 +41,7 @@ export function useProgram(loaded: boolean, connectionVersion: number) {
         current.current = merged; setSaved(merged);
         for (const entry of merged) {
           if (remote.some(item => item.day.id === entry.day.id && item.updatedAt === entry.updatedAt)) continue;
-          const result = await deviceRequest(fetch, savedDeviceKey, "/api/program", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) });
+          const result = await syncRequest(fetch, "/api/program", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) });
           if (!result.ok) { if (result.status === 409) queued = true; throw Error("Saved on device · cloud retry pending"); }
         }
         if (!stopped) setStatus("Synced");
@@ -59,7 +59,7 @@ export function useProgram(loaded: boolean, connectionVersion: number) {
     window.addEventListener("online", tick);
     document.addEventListener("visibilitychange", visible);
     return () => { stopped = true; flush.current = null; clearInterval(timer); window.removeEventListener("online", tick); document.removeEventListener("visibilitychange", visible); };
-  }, [loaded, ready, connectionVersion]);
+  }, [loaded, ready]);
   function restore(entries: SavedDay[]) {
     const merged = mergeProgram(current.current, entries);
     localStorage.setItem(key, JSON.stringify(merged));
