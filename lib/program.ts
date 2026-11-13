@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { PLAN, type Day } from "./plan.ts";
+import { DAY_IDS, LEGACY_DAY_IDS, PLAN, WARMUPS, type Day } from "./plan.ts";
 
+export const dayIdSchema = z.enum([...LEGACY_DAY_IDS, ...DAY_IDS]);
 export const programDaySchema = z.object({
-  id: z.enum(["upper", "lower-a", "push", "pull", "lower-b"]),
+  id: dayIdSchema,
   day: z.string().min(1).max(20),
   short: z.string().min(1).max(5),
   weekday: z.number().int().min(0).max(6),
@@ -23,6 +24,9 @@ export const programDaySchema = z.object({
     weightStep: z.number().min(0.01).max(100).optional(),
     timed: z.boolean().optional(),
     superset: z.boolean().optional(),
+    warmupCode: z.enum(Object.keys(WARMUPS) as (keyof typeof WARMUPS)[]).optional(),
+    progression: z.enum(["T", "D", "N"]).optional(),
+    perSide: z.boolean().optional(),
   }).refine(ex => ex.max >= ex.min, "Maximum must be at least the minimum.")
     .refine(ex => !ex.superset || (ex.name.split(" + ").length === 2 && ex.name.split(" + ").every(n => n.trim())), "Separate the two superset names with +."))
     .min(1).max(30),
@@ -33,7 +37,7 @@ export const programDaySchema = z.object({
     return new Set(ids).size === ids.length;
   }, "Movement IDs must be unique.");
 export const savedDaySchema = z.object({ day: programDaySchema, updatedAt: z.iso.datetime() });
-export const savedProgramSchema = z.array(savedDaySchema).max(5).refine(days => new Set(days.map(d => d.day.id)).size === days.length);
+export const savedProgramSchema = z.array(savedDaySchema).max(dayIdSchema.options.length).refine(days => new Set(days.map(d => d.day.id)).size === days.length);
 export type SavedDay = z.infer<typeof savedDaySchema>;
 export function mergeProgram(local: SavedDay[], remote: SavedDay[]): SavedDay[] {
   const byId = new Map(local.map(entry => [entry.day.id, entry]));

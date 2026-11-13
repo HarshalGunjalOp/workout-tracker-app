@@ -4,7 +4,8 @@ A personal, phone-first workout journal for Harshal’s five-day V-taper program
 
 ## Training
 
-- All five prescribed training days, every exercise, rep range, rest interval and form cue.
+- Upper A on Monday, Lower A on Tuesday, Upper B on Thursday, Lower B on Friday, and Upper C on Saturday. Wednesday and Sunday are rest days.
+- Exercise-specific ramp sets appear before the first working set and stay out of workout totals. Unilateral exercises show reps per side.
 - Program → open a day → Edit workout to customize names, descriptions, warm-ups, duration, sets, rep/hold ranges, rest, weight increments and coaching notes. Weight increments also apply immediately to the current session. Add, remove or reorder exercises. Saved changes apply to future sessions; existing sessions retain their plan snapshot.
 - Unsaved program edits ask before Close, Cancel or Escape discards them; the browser also warns before refresh or leaving the page.
 - Program edits save on device, sync across paired devices per workout, and are included in JSON backups.
@@ -13,7 +14,7 @@ A personal, phone-first workout journal for Harshal’s five-day V-taper program
 - Tap +/- or a rep shortcut instead of typing, with configurable weight increments and a bodyweight shortcut. One-tap undo, automatic next exercise and rest timer, optional sound/haptics, and screen wake lock where supported.
 - Previous/Next navigation visits every movement, including completed exercises. Tap any set in the focused logger to correct its weight or reps/duration without changing its completion status or other sets.
 - Full set log for individual corrections, exercise/session notes, resumable sessions. “Do this later” keeps unfinished work in the workout; the finish review offers a specific next set or an honest partial save.
-- Double progression prompts after all prescribed sets reach the top range at the same weight.
+- Progression follows the exercise prescription. Uncapped progression uses the first and last sets of the same workout. Double progression uses all prescribed sets. Neck work starts unloaded and gives technique and rep guidance.
 - Actual workout history, strongest logged sets, weekly consistency, JSON export/import.
 - Device autosave, offline app shell after first load, retrying cloud sync and installable home-screen app.
 

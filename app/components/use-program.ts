@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mergeProgram, resolveProgram, savedProgramSchema, savedDaySchema, type SavedDay } from "@/lib/program";
 import type { Day } from "@/lib/plan";
-const key = "form-program-v1";
+const key = "form-program-v2";
 
 export function useProgram(loaded: boolean) {
   const [saved, setSaved] = useState<SavedDay[]>([]);
@@ -12,7 +12,7 @@ export function useProgram(loaded: boolean) {
   const flush = useRef<(() => void) | null>(null);
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(key);
+      const raw = localStorage.getItem(key) ?? localStorage.getItem("form-program-v1");
       if (raw) {
         const parsed = savedProgramSchema.safeParse(JSON.parse(raw));
         if (parsed.success) { current.current = parsed.data; setSaved(parsed.data); }
@@ -42,7 +42,7 @@ export function useProgram(loaded: boolean) {
       running = true;
       setStatus("Saving");
       try {
-        const response = await request("/api/program");
+        const response = await request("/api/program?version=2");
         if (!response.ok) throw Error(response.status === 401 ? "Device only" : "Saved on device · cloud retry pending");
         const remote = savedProgramSchema.parse(await response.json());
         const merged = mergeProgram(current.current, remote);

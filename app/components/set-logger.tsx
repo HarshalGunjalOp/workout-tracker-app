@@ -12,8 +12,9 @@ import {
   Timer,
 } from "lucide-react";
 import { readWeightSteps } from "@/lib/weight-steps";
-import type { Exercise } from "@/lib/plan";
+import { WARMUPS, progressionTip, repUnit, type Exercise } from "@/lib/plan";
 import {
+  canProgress,
   supersetPartner,
   type MovementLog,
   type Session,
@@ -89,6 +90,7 @@ export function SetLogger({
   mi,
   ex,
   previous,
+  progressionHistory,
   seconds,
   resting,
   canUndo,
@@ -107,6 +109,7 @@ export function SetLogger({
   mi: number;
   ex?: Exercise;
   previous?: MovementLog;
+  progressionHistory?: MovementLog;
   seconds: number;
   resting: boolean;
   canUndo: boolean;
@@ -171,6 +174,10 @@ export function SetLogger({
     Number(set.reps) > 0 &&
     (ex.timed || (set.weight !== "" && Number.isFinite(Number(set.weight))));
   const restingNow = resting && seconds > 0;
+  const target = `${ex.min}–${ex.max} ${repUnit(ex)}`;
+  const ready = ex.progression && progressionHistory && canProgress(progressionHistory, ex);
+  const firstWorkingSet = !m.sets.some(s => s.done);
+  const progression = progressionTip(ex);
   return (
     <section className={"quick-logger " + (restingNow ? "is-resting " : "") + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
       {navigation}
@@ -203,6 +210,9 @@ export function SetLogger({
         </div>
       )}
       <h2 key={m.exerciseId} className="next-exercise-title" aria-live="polite">{m.name}</h2>
+      {!ex.timed && ex.warmupCode && firstWorkingSet && (
+        <div className="form-cue"><span>Warm-up · {WARMUPS[ex.warmupCode]}</span></div>
+      )}
       {partner && (
         <p className="superset-next">
           {partnerNext
@@ -227,13 +237,16 @@ export function SetLogger({
       </div>
       <p className="quick-context">
         {last
-          ? `Last time: ${ex.timed ? `${last.reps}s` : `${Number(last.weight) === 0 ? "Bodyweight" : `${last.weight} kg`} × ${last.reps}`}. Ready to repeat.`
+          ? `Last time: ${ex.timed ? `${last.reps}s` : `${Number(last.weight) === 0 ? "Bodyweight" : `${last.weight} kg`} × ${last.reps}${ex.perSide ? " per side" : ""}`}.${ex.timed ? "" : ` Target: ${target}.`}`
           : ex.timed
             ? `${ex.min}s hold prepared for you.`
             : set.weight === ""
-              ? `${ex.min}–${ex.max} reps prepared. Choose your weight once.`
-              : `${Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`} ready. Target: ${ex.min}–${ex.max} reps.`}
+              ? `Target: ${target}. Choose your working weight.`
+              : `${Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`} ready. Target: ${target}.`}
       </p>
+      {ready && firstWorkingSet && (
+        <div className="progression-cue"><span>Last time on this workout you met the rep targets for a small weight increase.</span></div>
+      )}
       <div className={"quick-values " + (ex.timed ? "timed" : "")}>
         {!ex.timed && (
           <Stepper
@@ -245,8 +258,8 @@ export function SetLogger({
           />
         )}
         <Stepper
-          label={ex.timed ? "Duration" : "Reps"}
-          unit={ex.timed ? "sec" : "reps"}
+          label={ex.timed ? "Duration" : ex.perSide ? "Reps per side" : "Reps"}
+          unit={repUnit(ex)}
           value={set.reps}
           step={ex.timed ? 5 : 1}
           onChange={(v) => onChange("reps", v)}
@@ -310,9 +323,10 @@ export function SetLogger({
       </div>
       <details className="quick-cue">
         <summary>
-          Form tip{previous?.note ? " & last session’s note" : ""}
+          Form tip{progression && " & progression"}{previous?.note ? " · last session’s note" : ""}
         </summary>
         <p>{ex.cue}</p>
+        {progression && <p>{progression}</p>}
         {previous?.note && <p>Last time: {previous.note}</p>}
       </details>
     </section>

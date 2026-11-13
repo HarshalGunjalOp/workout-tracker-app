@@ -36,7 +36,7 @@ import {
   VolumeX,
   Moon,
 } from "lucide-react";
-import { PLAN, nextDay, totalSets, type Day, type Exercise } from "@/lib/plan";
+import { PLAN, WARMUPS, nextDay, progressionTip, repUnit, totalSets, workoutDay, type Day, type Exercise } from "@/lib/plan";
 import { createJournalSync } from "@/lib/journal-sync";
 import { sessionSchema } from "@/lib/schema";
 import { ProgramEditor } from "./components/program-editor";
@@ -211,7 +211,8 @@ export default function Home() {
   current.current = sessions;
   const active = sessions.find((s) => s.id === activeId),
     history = sessions.filter((s) => s.finishedAt && !s.discardedAt),
-    day = active?.programDay ?? (active ? PLAN.find((d) => d.id === active.dayId) : selectedDay) ?? selectedDay;
+    day = active?.programDay ?? (active ? workoutDay(active.dayId) : selectedDay) ?? selectedDay;
+  const comparableHistory = active ? history.filter(s => s.dayId === day.id) : [];
   const showNotice = useCallback((s: string) => setNotice(s), []);
   useEffect(() => {
     try {
@@ -500,7 +501,7 @@ export default function Home() {
       setRestEnd(
         hasRemaining && !roundContinues ? Date.now() + ex.rest * 1000 : null,
       );
-      const pr = isRecord(sessions, active!, mi, si, !!ex.timed);
+      const pr = ex.progression !== "N" && isRecord(sessions, active!, mi, si, !!ex.timed);
       const movementComplete = active!.movements[mi].sets.every((s, i) => s.done || i === si);
       if (pr || !hasRemaining) setCelebration({ id: Date.now(), pr, name: pr ? "NEW PR" : "WORKOUT COMPLETE" });
       setSetFeedback({ id: Date.now(), name: active!.movements[mi].name, complete: movementComplete, count: active!.movements[mi].sets.length });
@@ -562,7 +563,7 @@ export default function Home() {
   }
   const week = history.filter((s) => localDate(s.startedAt) >= weekStart()),
     weekDays = new Set(week.map((s) => s.dayId)),
-    weekCount = weekDays.size,
+    weekCount = new Set(week.map(s => localDate(s.startedAt))).size,
     done = active ? completedSets(active) : 0,
     total = active
       ? active.movements.reduce((n, m) => n + m.sets.length, 0)
@@ -588,7 +589,7 @@ export default function Home() {
   const focusEx = day.exercises.find(
     (e) =>
       focusMovement?.exerciseId === e.id ||
-      focusMovement?.exerciseId.startsWith(e.id + "-"),
+      (e.superset && focusMovement?.exerciseId.startsWith(e.id + "-")),
   );
   const focusSi = focusMovement?.sets.findIndex((s) => !s.done) ?? -1;
   const canUndo = !!(
@@ -750,7 +751,7 @@ export default function Home() {
             >
               <summary>
                 <Flame size={16} /> Warm-up{" "}
-                <span>{warmup ? "Done" : "5 min · tap to view"}</span>
+                <span>{warmup ? "Done" : "Tap to view"}</span>
               </summary>
               <button
                 className={"warmup " + (warmup ? "warmup-done" : "")}
@@ -763,7 +764,6 @@ export default function Home() {
                   <strong>Get warm. Move well.</strong>
                   <small>{day.warmup}</small>
                 </span>
-                <span className="warmup-time">5 MIN</span>
               </button>
             </details>
             <div className="logger-anchor">
@@ -784,6 +784,7 @@ export default function Home() {
               feedback={setFeedback}
               mi={focusMi}
               ex={focusEx}
+              progressionHistory={previousMovement(comparableHistory, active.movements[focusMi]?.exerciseId ?? "")}
               previous={
                 focusMovement
                   ? previousMovement(
@@ -868,7 +869,7 @@ export default function Home() {
                     const ex = day.exercises.find(
                       (e) =>
                         m.exerciseId === e.id ||
-                        m.exerciseId.startsWith(e.id + "-"),
+                        (e.superset && m.exerciseId.startsWith(e.id + "-")),
                     )!;
                     const previous = previousMovement(
                         history,
@@ -877,7 +878,10 @@ export default function Home() {
                       ),
                       complete = m.sets.every((s) => s.done),
                       open = expanded === m.exerciseId;
-                    const ready = previous && canProgress(previous, ex);
+                    const comparable = ex.progression
+                      ? previousMovement(comparableHistory, m.exerciseId, active.id)
+                      : previous;
+                    const ready = comparable && canProgress(comparable, ex);
                     return (
                       <section
                         className={
@@ -916,7 +920,7 @@ export default function Home() {
                               {ex.min === ex.max
                                 ? ex.min
                                 : `${ex.min}–${ex.max}`}{" "}
-                              {ex.timed ? "sec" : "reps"} <span>·</span>{" "}
+                              {repUnit(ex)} <span>·</span>{" "}
                               {ex.rest}s {ex.superset ? "after both" : "rest"}
                             </small>
                           </span>
@@ -935,6 +939,9 @@ export default function Home() {
                               <Info size={15} />
                               <span>{ex.cue}</span>
                             </div>
+                            {!ex.timed && ex.warmupCode && (
+                              <div className="form-cue"><Flame size={15} /><span>{WARMUPS[ex.warmupCode]}</span></div>
+                            )}
                             {previous?.note && (
                               <div className="form-cue previous-note">
                                 <NotebookPen size={15} />
@@ -961,11 +968,11 @@ export default function Home() {
                               {m.sets.map((s, si) => (
                                 <div
                                   className={
-                                    "set-row " + (s.done ? "logged" : "") + (s.done && isRecord(sessions, active, mi, si, !!ex.timed) ? " record-set" : "")
+                                    "set-row " + (s.done ? "logged" : "") + (s.done && ex.progression !== "N" && isRecord(sessions, active, mi, si, !!ex.timed) ? " record-set" : "")
                                   }
                                   key={si}
                                 >
-                                  <span className="set-index">{s.done && isRecord(sessions, active, mi, si, !!ex.timed) ? <Trophy size={18} aria-label="Personal record" /> : si + 1}</span>
+                                  <span className="set-index">{s.done && ex.progression !== "N" && isRecord(sessions, active, mi, si, !!ex.timed) ? <Trophy size={18} aria-label="Personal record" /> : si + 1}</span>
                                   <span className="previous-set">
                                     {previous?.sets[si]?.done
                                       ? `${previous.sets[si].weight || "BW"} × ${previous.sets[si].reps}`
@@ -1292,41 +1299,8 @@ export default function Home() {
                           {selectedDay.day.toUpperCase()}
                         </span>
                       </div>
-                      <h2>
-                        {selectedDay.id === "upper" ? (
-                          <>
-                            Build your
-                            <br />
-                            upper frame.
-                          </>
-                        ) : selectedDay.id === "lower-a" ? (
-                          <>
-                            Strength in
-                            <br />
-                            the details.
-                          </>
-                        ) : selectedDay.id === "push" ? (
-                          <>
-                            Press toward
-                            <br />
-                            your next level.
-                          </>
-                        ) : selectedDay.id === "pull" ? (
-                          <>
-                            Build a<br />
-                            wider back.
-                          </>
-                        ) : (
-                          <>
-                            Find your
-                            <br />
-                            strong foundation.
-                          </>
-                        )}
-                      </h2>
-                      <p>
-                        {selectedDay.title} <span>/</span> {selectedDay.label}
-                      </p>
+                      <h2>{selectedDay.title}</h2>
+                      <p>{selectedDay.label}</p>
                       <div className="hero-meta">
                         <span>
                           <Dumbbell size={15} />
@@ -1535,7 +1509,7 @@ export default function Home() {
                           </span>
                           <span className="preview-prescription">
                             {ex.sets} <span>×</span> {ex.min}–{ex.max}
-                            <small> {ex.timed ? "sec" : "reps"}</small>
+                            <small> {repUnit(ex)}</small>
                           </span>
                         </div>
                       ))}
@@ -1595,18 +1569,13 @@ export default function Home() {
                 <div className="program-intro">
                   <Target size={23} />
                   <div>
-                    <strong>Progress with precision.</strong>
+                    <strong>Follow each exercise’s progression rule.</strong>
                     <p>
-                      Use a weight that leaves 1–2 reps in reserve. Hit the top
-                      of the rep range across all sets, then increase by the
-                      smallest available increment.
+                      Uncapped progression uses the first and last sets. Double
+                      progression uses every working set. For neck work, build
+                      comfortable reps unloaded first.
                     </p>
                   </div>
-                  <span>
-                    3–1–1–1
-                    <br />
-                    <small>TEMPO GUIDE</small>
-                  </span>
                 </div>
                 <p className="footnote" role="status">Program: {program.status}</p>
                 <div className="program-list">
@@ -1659,6 +1628,8 @@ export default function Home() {
                                   {ex.muscle}
                                 </small>
                                 <p>{ex.cue}</p>
+                                {!ex.timed && ex.warmupCode && <p>Warm-up · {WARMUPS[ex.warmupCode]}</p>}
+                                {ex.progression && <p>{progressionTip(ex)}</p>}
                               </div>
                               <span>
                                 {ex.sets} ×{" "}
@@ -1666,7 +1637,7 @@ export default function Home() {
                                   ? ex.min
                                   : `${ex.min}–${ex.max}`}
                                 <small>
-                                  {ex.timed ? "seconds" : "reps"} · {ex.rest}s
+                                  {repUnit(ex, "seconds")} · {ex.rest}s
                                   {ex.superset ? " after both" : " rest"}
                                 </small>
                               </span>
@@ -1685,9 +1656,7 @@ export default function Home() {
                   ))}
                 </div>
                 <p className="footnote">
-                  Wednesday: active recovery, mobility & steps. Sunday: full
-                  rest. Paired movements are logged separately so each has an
-                  accurate history.
+                  Rest days are Wednesday and Sunday.
                 </p>
               </>
             )}
@@ -1737,7 +1706,7 @@ export default function Home() {
                           </span>
                           <span className="history-title">
                             <strong>
-                              {s.programDay?.title ?? PLAN.find((d) => d.id === s.dayId)?.title}
+                              {s.programDay?.title ?? workoutDay(s.dayId)?.title}
                             </strong>
                             <small>
                               {completedSets(s)} sets <span>·</span>{" "}
@@ -2067,7 +2036,7 @@ export default function Home() {
               when you walked in<span>.</span>
             </h2>
             <p>
-              {summary.programDay?.title ?? PLAN.find((d) => d.id === summary.dayId)?.title} ·{" "}
+              {summary.programDay?.title ?? workoutDay(summary.dayId)?.title} ·{" "}
               {date(summary.startedAt)}
             </p>
             <div className="summary-stats">
@@ -2128,7 +2097,7 @@ export default function Home() {
               }).toUpperCase()}
             </div>
             <h2>
-              {detail.programDay?.title ?? PLAN.find((d) => d.id === detail.dayId)?.title}
+              {detail.programDay?.title ?? workoutDay(detail.dayId)?.title}
               <span>.</span>
             </h2>
             <p>

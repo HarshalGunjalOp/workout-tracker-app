@@ -51,8 +51,9 @@ export function makeSession(
               ? last.sets[i]
               : completed?.at(-1);
             return {
-              weight: ex.timed ? "" : (target?.weight ?? ""),
-              reps: target?.reps && Number(target.reps) >= ex.min && Number(target.reps) <= ex.max
+              weight: ex.timed ? "" : (target?.weight ?? (ex.progression === "N" ? "0" : "")),
+              reps: target?.reps && Number(target.reps) >= ex.min &&
+                (Number(target.reps) <= ex.max || ex.progression === "T")
                 ? target.reps : String(ex.min),
               done: false,
             };
@@ -100,13 +101,14 @@ export function editSet(
   };
 }
 export function canProgress(m: MovementLog, ex: Exercise): boolean {
-  return (
-    !ex.timed &&
-    m.sets.length >= ex.sets &&
-    m.sets.every((s) => s.done && Number(s.reps) >= ex.max) &&
-    m.sets.every((s) => s.weight === m.sets[0].weight) &&
-    Number(m.sets[0].weight) > 0
-  );
+  if (ex.timed || ex.progression === "N" || m.sets.length < ex.sets) return false;
+  const sets = ex.progression ? m.sets.slice(0, ex.sets) : m.sets;
+  const first = sets[0];
+  if (!(Number(first.weight) > 0) || !sets.every(s => s.done && s.weight === first.weight)) return false;
+  if (ex.progression === "T") {
+    return m.sets.length === ex.sets && Number(first.reps) >= ex.max && Number(sets.at(-1)!.reps) >= ex.min;
+  }
+  return sets.every(s => Number(s.reps) >= ex.max);
 }
 export const completedSets = (s: Session) =>
   s.movements.reduce((a, m) => a + m.sets.filter((s) => s.done).length, 0);

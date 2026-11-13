@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
-import { type Day, type Exercise } from "@/lib/plan";
+import { WARMUPS, type Day, type Exercise } from "@/lib/plan";
 import { readWeightSteps } from "@/lib/weight-steps";
 import { programDaySchema } from "@/lib/program";
 
@@ -89,9 +89,20 @@ export function ProgramEditor({ day, onSave, onClose }: {
             <label>Rest (seconds)<input required type="number" min={0} max={1800} value={ex.rest} onChange={e => exercise(ex.id, { rest: Number(e.target.value) })} /></label>
             <label>Minimum {ex.timed ? "seconds" : "reps"}<input required type="number" min={1} max={99999} value={ex.min || ""} onChange={e => exercise(ex.id, { min: Number(e.target.value) })} /></label>
             <label>Maximum {ex.timed ? "seconds" : "reps"}<input required type="number" min={ex.min || 1} max={99999} value={ex.max || ""} onChange={e => exercise(ex.id, { max: Number(e.target.value) })} /></label>
+            {!ex.timed && <>
+              <label>Warm-up sets<select value={ex.warmupCode ?? ""} onChange={e => exercise(ex.id, { warmupCode: (e.target.value || undefined) as Exercise["warmupCode"] })}>
+                <option value="">Use workout warm-up</option>
+                {Object.entries(WARMUPS).map(([code, guidance]) => <option key={code} value={code}>{code} · {guidance}</option>)}
+              </select></label>
+              <label>Progression<select value={ex.progression ?? "D"} onChange={e => exercise(ex.id, { progression: e.target.value as Exercise["progression"] })}>
+                <option value="D">Double progression</option>
+                <option value="T">Uncapped performance</option>
+                <option value="N">Neck progression</option>
+              </select></label>
+            </>}
             <label className="program-wide">Description / coaching notes<textarea maxLength={2000} value={ex.cue} onChange={e => exercise(ex.id, { cue: e.target.value })} /></label>
           </div>
-          {!ex.superset && <label className="program-unit">Measure targets in<select value={ex.timed ? "seconds" : "reps"} onChange={event => exercise(ex.id, { timed: event.target.value === "seconds" })}><option value="reps">Reps</option><option value="seconds">Seconds (timed hold)</option></select></label>}
+          {!ex.superset && <label className="program-unit">Measure targets in<select value={ex.timed ? "seconds" : ex.perSide ? "per-side" : "reps"} onChange={event => exercise(ex.id, { timed: event.target.value === "seconds", perSide: event.target.value === "per-side" })}><option value="reps">Reps</option><option value="per-side">Reps per side</option><option value="seconds">Seconds (timed hold)</option></select></label>}
         </fieldset>)}
         <button type="button" className="outline-button" disabled={draft.exercises.reduce((n, ex) => n + (ex.superset ? 2 : 1), 0) >= 30} onClick={() => setDraft({ ...draft, exercises: [...draft.exercises, {
           id: `custom-${crypto.randomUUID()}`, name: "New exercise", muscle: "", sets: 3, min: 8, max: 12, rest: 60, cue: "", weightStep: 2.5,

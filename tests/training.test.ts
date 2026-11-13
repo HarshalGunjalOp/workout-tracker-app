@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PLAN, nextDay, totalSets } from "../lib/plan.ts";
+import { PLAN as CURRENT_PLAN, nextDay, totalSets, workoutDay } from "../lib/plan.ts";
+import { LEGACY_PLAN as PLAN } from "../lib/legacy-plan.ts";
 import {
   makeSession,
   supersetFocus,
@@ -43,7 +44,7 @@ test("all five program days preserve seven exercises and paired movements", () =
     lower.movements.reduce((n, m) => n + m.sets.length, 0),
   );
 });
-test("the app prescription matches the updated V-taper blueprint", () => {
+test("historical workout presets preserve the original prescriptions", () => {
   const prescriptions = PLAN.flatMap((day) =>
     day.exercises.map((exercise) => ({
       day: day.id,
@@ -137,8 +138,11 @@ test("sync merge never overwrites a newer local session with stale remote data",
   assert.equal(mergeSessions([a], [b])[0].note, "newer");
 });
 test("suggested day and dates use India time at day boundaries", () => {
-  assert.equal(nextDay(new Date("2026-10-25T23:00:00Z")).id, "upper");
-  assert.equal(nextDay(new Date("2026-10-28T09:00:00Z")).id, "push");
+  assert.equal(nextDay(new Date("2026-10-25T23:00:00Z")).id, "upper-a-v2");
+  assert.equal(nextDay(new Date("2026-10-28T09:00:00Z")).id, "upper-b-v2");
+  assert.equal(nextDay(new Date("2026-11-13T09:00:00Z")).id, "lower-b-v2");
+  assert.equal(nextDay(new Date("2026-11-14T09:00:00Z")).id, "upper-c-v2");
+  assert.equal(nextDay(new Date("2026-11-15T09:00:00Z")).id, "upper-a-v2");
   assert.equal(localDate("2026-10-25T23:00:00Z"), "2026-10-26");
 });
 
@@ -310,4 +314,95 @@ test("switching keeps supersets together and returns to their earliest unfinishe
   assert.equal(nextWorkoutFocus(session, day, [ex.id]), b);
   const restored = JSON.parse(JSON.stringify({ session, deferred: [ex.id], focus: parts[0].id }));
   assert.equal(nextWorkoutFocus(restored.session, day, restored.deferred, restored.focus), b);
+});
+
+test("new V-taper prescriptions match the PDF in workout order", () => {
+  assert.deepEqual(CURRENT_PLAN.map(day => [day.day, day.title, totalSets(day)]), [
+    ["Monday", "Upper A", 19],
+    ["Tuesday", "Lower A", 21],
+    ["Thursday", "Upper B", 20],
+    ["Friday", "Lower B", 21],
+    ["Saturday", "Upper C", 21],
+  ]);
+  assert.deepEqual(CURRENT_PLAN.map(day => day.exercises.map(ex =>
+    `${ex.id} ${ex.sets}×${ex.min}–${ex.max}${ex.perSide ? "/side" : ""} ${ex.progression} ${ex.warmupCode}`)), [
+    [
+      "medium-lat 4×6–10 T W3",
+      "cable-lateral 4×12–20/side D W1",
+      "smith-incline 4×5–8 T W2",
+      "supported-row 3×8–12 T W1",
+      "incline-curl 2×8–12 D W0",
+      "pushdown 2×10–15 D W0",
+    ],
+    [
+      "smith-squat 3×5–8 T W3",
+      "leg-extension 3×8–12 T W1",
+      "leg-curl 3×8–12 T W1",
+      "standing-calf 3×10–20 D W1",
+      "db-lateral 2×12–20 D W1",
+      "rope-crunch 3×10–15 D W0",
+      "cable-reverse-curl 2×10–15 D W0",
+      "unloaded-neck-flex 2×12–20 N WN",
+    ],
+    [
+      "db-lateral 4×12–20 D W1",
+      "lat-pulldown 4×6–10 T W2",
+      "shoulder-press 2×6–10 T W2",
+      "smith-flat 3×5–8 T W2",
+      "cable-rear-fly 3×12–20 D W1",
+      "preacher-curl 2×8–12 D W1",
+      "overhead-rope 2×10–15 D W1",
+    ],
+    [
+      "supported-split-squat 3×8–12/side T W3",
+      "leg-curl 4×8–12 T W1",
+      "leg-extension 2×10–15 T W1",
+      "floor-glute-bridge 2×10–15 D W1",
+      "standing-calf 3×10–20 D W1",
+      "reverse-crunch 3×10–20 D W0",
+      "wrist-curl-machine 2×12–20 D W1",
+      "unloaded-side-neck 2×12–20/side N WN",
+    ],
+    [
+      "lat-pulldown 5×6–10 T W3",
+      "supported-row 3×8–12 T W1",
+      "cable-lateral 4×12–20/side D W1",
+      "smith-incline 3×6–10 T W2",
+      "cable-rear-fly 2×12–20 D W1",
+      "incline-curl 2×8–12 D W0",
+      "pushdown 2×10–15 D W0",
+    ],
+  ]);
+  for (const day of PLAN) assert.equal(workoutDay(day.id), day);
+});
+
+test("uncapped progression uses the first and last working sets at the same load", () => {
+  const day = CURRENT_PLAN[0];
+  const session = makeSession(day, [], "id", now);
+  session.finishedAt = now;
+  const movement = session.movements[0];
+  const ex = day.exercises[0];
+  movement.sets = [13, 9, 8, 6].map(reps => ({ weight: "35", reps: String(reps), done: true }));
+  assert.equal(canProgress(movement, ex), true);
+  assert.equal(makeSession(day, [session], "next", now).movements[0].sets[0].reps, "13");
+  movement.sets[3].reps = "5";
+  assert.equal(canProgress(movement, ex), false);
+  movement.sets[3].reps = "6";
+  movement.sets[1].done = false;
+  assert.equal(canProgress(movement, ex), false);
+  movement.sets[1].done = true;
+  movement.sets[3].weight = "30";
+  assert.equal(canProgress(movement, ex), false);
+});
+
+test("new neck exercises start unloaded even when the old plan logged plate work", () => {
+  const old = makeSession(PLAN[1], [], "old", now);
+  old.finishedAt = now;
+  old.movements.find(m => m.exerciseId === "neck-flex")!.sets[0] = { weight: "5", reps: "20", done: true };
+  const day = CURRENT_PLAN[1];
+  const session = makeSession(day, [old], "new", now);
+  const neck = session.movements.at(-1)!;
+  assert.deepEqual(neck.sets, Array.from({ length: 2 }, () => ({ weight: "0", reps: "12", done: false })));
+  neck.sets = neck.sets.map(() => ({ weight: "1", reps: "20", done: true }));
+  assert.equal(canProgress(neck, day.exercises.at(-1)!), false);
 });

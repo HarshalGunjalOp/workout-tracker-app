@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PLAN, totalSets } from "../lib/plan.ts";
+import { PLAN as CURRENT_PLAN, totalSets } from "../lib/plan.ts";
+import { LEGACY_PLAN as PLAN } from "../lib/legacy-plan.ts";
 import { mergeProgram, resolveProgram, programDaySchema, savedProgramSchema } from "../lib/program.ts";
 import { sessionSchema } from "../lib/schema.ts";
 import { makeSession, volume } from "../lib/training.ts";
@@ -26,12 +27,12 @@ test("personalized program drives session names, set counts and new rep targets"
   assert.equal(previous.movements[0].sets.length, 4);
 });
 test("different devices merge edits per workout and newer changes win", () => {
-  const local = savedProgramSchema.parse([{ day: { ...PLAN[0], title: "Latest" }, updatedAt: later }]);
-  const remote = savedProgramSchema.parse([{ day: { ...PLAN[0], title: "Stale" }, updatedAt: earlier }, { day: PLAN[1], updatedAt: earlier }]);
+  const local = savedProgramSchema.parse([{ day: { ...CURRENT_PLAN[0], title: "Latest" }, updatedAt: later }]);
+  const remote = savedProgramSchema.parse([{ day: { ...CURRENT_PLAN[0], title: "Stale" }, updatedAt: earlier }, { day: CURRENT_PLAN[1], updatedAt: earlier }]);
   const merged = mergeProgram(local, remote);
   assert.equal(merged.length, 2);
   assert.equal(resolveProgram(merged)[0].title, "Latest");
-  assert.equal(resolveProgram(merged)[2].title, PLAN[2].title);
+  assert.equal(resolveProgram(merged)[2].title, CURRENT_PLAN[2].title);
   assert.deepEqual(mergeProgram(remote, local), merged);
   assert.ok(savedProgramSchema.safeParse(merged).success);
 });
@@ -63,7 +64,7 @@ test("custom timed holds do not count toward volume and legacy sessions remain v
 });
 
 test("weight increments survive program sync, backups and session snapshots", () => {
-  const day = structuredClone(PLAN[0]);
+  const day = structuredClone(CURRENT_PLAN[0]);
   day.exercises[0].weightStep = 1.25;
   const saved = savedProgramSchema.parse([{ day, updatedAt: later }]);
   const resolved = resolveProgram(mergeProgram([], saved))[0];
@@ -73,5 +74,19 @@ test("weight increments survive program sync, backups and session snapshots", ()
   for (const value of [0, -1, 101, NaN]) {
     day.exercises[0].weightStep = value;
     assert.equal(programDaySchema.safeParse(day).success, false);
+  }
+});
+
+test("old edits survive backup and sync without replacing the new split", () => {
+  const legacy = savedProgramSchema.parse(PLAN.map(day => ({ day: { ...day, title: "Old custom " + day.title }, updatedAt: earlier })));
+  const current = savedProgramSchema.parse(CURRENT_PLAN.map(day => ({ day, updatedAt: later })));
+  assert.deepEqual(resolveProgram(legacy), CURRENT_PLAN);
+  const backup = savedProgramSchema.parse(mergeProgram(legacy, current));
+  assert.equal(backup.length, 10);
+  assert.equal(backup.find(entry => entry.day.id === "upper")?.day.title, "Old custom Upper body");
+  assert.deepEqual(resolveProgram(backup), CURRENT_PLAN);
+  for (const day of [...PLAN, ...CURRENT_PLAN]) {
+    const session = makeSession(day, [], crypto.randomUUID(), later);
+    assert.deepEqual(sessionSchema.parse(session), session);
   }
 });

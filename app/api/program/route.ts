@@ -1,16 +1,20 @@
 import { neon } from "@neondatabase/serverless";
 import { NextResponse } from "next/server";
 import { savedDaySchema } from "@/lib/program";
+import { LEGACY_DAY_IDS } from "@/lib/plan";
 import { owner, sameOrigin } from "@/lib/server";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   const user = await owner();
   if (!user) return NextResponse.json({ error: "Device is not connected." }, { status: 401 });
   if (!process.env.DATABASE_URL) return NextResponse.json({ error: "Cloud is not configured." }, { status: 503 });
   try {
     const sql = neon(process.env.DATABASE_URL);
-    const rows = await sql`SELECT payload FROM workout_program_days WHERE owner_hash=${user}`;
+    const includeNewPlan = new URL(req.url).searchParams.get("version") === "2";
+    const rows = includeNewPlan
+      ? await sql`SELECT payload FROM workout_program_days WHERE owner_hash=${user}`
+      : await sql`SELECT payload FROM workout_program_days WHERE owner_hash=${user} AND day_id = ANY(${LEGACY_DAY_IDS}::text[])`;
     return NextResponse.json(rows.map(row => row.payload), { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Program sync is unavailable." }, { status: 503 });

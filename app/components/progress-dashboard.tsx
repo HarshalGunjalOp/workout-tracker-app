@@ -36,7 +36,7 @@ export function ProgressDashboard({ history, plan = PLAN }: { history: Session[]
   const activeDays = days.filter((d) => d.count > 0).length;
   const milestones = plan.flatMap((day) =>
     day.exercises.flatMap((ex) => {
-      if (ex.timed) return [];
+      if (ex.timed || ex.progression === "N") return [];
       return movementsFor(ex).flatMap((movement) => {
         const previous = previousMovement(history, movement.id);
         const sets = history.flatMap((s) =>
@@ -50,8 +50,11 @@ export function ProgressDashboard({ history, plan = PLAN }: { history: Session[]
             Number(b.reps) - Number(a.reps),
         )[0];
         if (!best || !previous) return [];
-        const ready = canProgress(previous, ex);
-        const completed = previous.sets.filter((s) => s.done);
+        const comparable = ex.progression
+          ? previousMovement(history.filter(s => s.dayId === day.id), movement.id)
+          : previous;
+        const ready = comparable ? canProgress(comparable, ex) : false;
+        const completed = comparable?.sets.filter(s => s.done) ?? [];
         const achieved = completed
           .slice(0, ex.sets)
           .reduce(
@@ -61,7 +64,11 @@ export function ProgressDashboard({ history, plan = PLAN }: { history: Session[]
           );
         return [
           {
-            id: movement.id,
+            id: day.id + "/" + movement.id,
+            workout: day.title,
+            uncapped: ex.progression === "T",
+            firstTarget: ex.max,
+            lastTarget: ex.min,
             name: movement.name,
             muscle: ex.muscle,
             best,
@@ -205,7 +212,7 @@ export function ProgressDashboard({ history, plan = PLAN }: { history: Session[]
             {milestones.map((m) => (
               <article className={styles.milestone} key={m.id}>
                 <div className={styles.muscle}>
-                  <span>{m.muscle}</span>
+                  <span>{m.muscle} · {m.workout}</span>
                   <Trophy size={16} />
                 </div>
                 <h3>{m.name}</h3>
@@ -223,26 +230,34 @@ export function ProgressDashboard({ history, plan = PLAN }: { history: Session[]
                   {m.best.reps}
                   <small>reps</small>
                 </div>
-                <div
-                  className={styles.repTrack}
-                  role="meter"
-                  aria-label={`${m.name}: reps toward target in latest session`}
-                  aria-valuemin={0}
-                  aria-valuemax={m.target}
-                  aria-valuenow={Math.min(m.target, m.achieved)}
-                >
-                  <div
-                    style={{
-                      width: `${Math.min(100, (m.achieved / m.target) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <div className={styles.target}>
-                  <span>Latest session rep target</span>
-                  <strong>
-                    {m.achieved}/{m.target}
-                  </strong>
-                </div>
+                {m.uncapped ? (
+                  <div className={styles.target}>
+                    <span>First set ≥ {m.firstTarget} · Last set ≥ {m.lastTarget}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      className={styles.repTrack}
+                      role="meter"
+                      aria-label={`${m.name}: reps toward target in latest session`}
+                      aria-valuemin={0}
+                      aria-valuemax={m.target}
+                      aria-valuenow={Math.min(m.target, m.achieved)}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(100, (m.achieved / m.target) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <div className={styles.target}>
+                      <span>Rep target for this workout</span>
+                      <strong>
+                        {m.achieved}/{m.target}
+                      </strong>
+                    </div>
+                  </>
+                )}
                 <p className={m.ready ? styles.ready : styles.building}>
                   {m.ready ? (
                     <>
