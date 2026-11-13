@@ -4,8 +4,8 @@ import { sessionSchema } from "@/lib/schema";
 import { owner, sameOrigin } from "@/lib/server";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const user = await owner();
+export async function GET(req: Request) {
+  const user = await owner(req);
   if (!user)
     return NextResponse.json(
       { error: "Open your personal device link to connect." },
@@ -34,7 +34,7 @@ export async function GET() {
 export async function POST(req: Request) {
   if (!sameOrigin(req))
     return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
-  const user = await owner();
+  const user = await owner(req);
   if (!user)
     return NextResponse.json(
       { error: "Device is not connected." },
@@ -45,13 +45,19 @@ export async function POST(req: Request) {
       { error: "Cloud storage is not configured." },
       { status: 503 },
     );
-  if (Number(req.headers.get("content-length") || 0) > 100000)
+  if (Number(req.headers.get("content-length") || 0) > 1_048_576)
     return NextResponse.json({ error: "Request too large" }, { status: 413 });
   try {
     const raw = await req.text();
-    if (raw.length > 100000)
+    if (Buffer.byteLength(raw) > 1_048_576)
       return NextResponse.json({ error: "Request too large" }, { status: 413 });
-    const result = sessionSchema.safeParse(JSON.parse(raw));
+    let data: unknown;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return NextResponse.json({ error: "Invalid workout data" }, { status: 400 });
+    }
+    const result = sessionSchema.safeParse(data);
     if (!result.success)
       return NextResponse.json(
         { error: "Invalid workout data" },
@@ -60,13 +66,13 @@ export async function POST(req: Request) {
     const s = result.data;
     const sql = neon(process.env.DATABASE_URL);
     const rows =
-      await sql`INSERT INTO workout_sessions(id,day_id,started_at,finished_at,updated_at,payload,owner_hash) VALUES(${s.id},${s.dayId},${s.startedAt},${s.finishedAt},${s.updatedAt},${JSON.stringify(s)}::jsonb,${user}) ON CONFLICT(id) DO UPDATE SET finished_at=EXCLUDED.finished_at,updated_at=EXCLUDED.updated_at,payload=EXCLUDED.payload WHERE workout_sessions.owner_hash=${user} AND workout_sessions.updated_at<=EXCLUDED.updated_at RETURNING id`;
+      await sql`INSERT INTO workout_sessions(id,day_id,started_at,finished_at,updated_at,payload,owner_hash) VALUES(${s.id},${s.dayId},${s.startedAt},${s.finishedAt},${s.updatedAt},${JSON.stringify(s)}::jsonb,${user}) ON CONFLICT(id) DO UPDATE SET finished_at=EXCLUDED.finished_at,updated_at=EXCLUDED.updated_at,payload=EXCLUDED.payload WHERE workout_sessions.owner_hash=${user} AND workout_sessions.updated_at<=EXCLUDED.updated_at RETURNING payload`;
     if (!rows.length)
       return NextResponse.json(
         { error: "A newer copy exists. Refresh to merge your devices." },
         { status: 409 },
       );
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, session: rows[0].payload });
   } catch {
     return NextResponse.json(
       { error: "Could not sync. Your workout is saved on this device." },

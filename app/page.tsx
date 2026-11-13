@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { PLAN, WARMUPS, nextDay, progressionTip, repUnit, totalSets, workoutDay, type Day, type Exercise } from "@/lib/plan";
 import { createJournalSync } from "@/lib/journal-sync";
+import { deviceKeyFromLink, deviceKeyStorage, pairDevice, savedDeviceKey } from "@/lib/device-sync";
 import { sessionSchema } from "@/lib/schema";
 import { ProgramEditor } from "./components/program-editor";
 import { useProgram } from "./components/use-program";
@@ -138,8 +139,11 @@ export default function Home() {
     [expanded, setExpanded] = useState<string | null>(null),
     [warmup, setWarmup] = useState(false),
     [saveError, setSaveError] = useState(false),
-    [syncTick, setSyncTick] = useState(0);
-  const program = useProgram(loaded);
+    [connectionVersion, setConnectionVersion] = useState(0),
+    [showReconnect, setShowReconnect] = useState(false),
+    [pairing, setPairing] = useState(false),
+    [pairingMessage, setPairingMessage] = useState("");
+  const program = useProgram(loaded, connectionVersion);
   const [editingDay, setEditingDay] = useState<Day | null>(null);
   const selectedDay = program.plan.find(d => d.id === selected.id) ?? selected;
   const [darkMode, setDarkMode] = useState(false);
@@ -236,7 +240,7 @@ export default function Home() {
     setLoaded(true);
     if ("serviceWorker" in navigator) {
       if (process.env.NODE_ENV === "production")
-        navigator.serviceWorker.register("/sw.js").catch(() => {});
+        navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {});
       else
         navigator.serviceWorker
           .getRegistrations()
@@ -263,35 +267,16 @@ export default function Home() {
   }, [sessions, activeId, loaded, restEnd, sound, expanded, deferred]);
   useEffect(() => {
     if (!loaded) return;
-    const params = new URLSearchParams(location.hash.slice(1));
-    const linkKey = params.get("key");
-    let linkPaired = !linkKey;
     const engine = createJournalSync({
       read: () => current.current,
       write: (merged) => { current.current = merged; setSessions(merged); },
-      status: setSync,
-      key: () => {
-        if (linkKey) return linkKey;
-        try { return localStorage.getItem("form-device-key"); } catch { return null; }
+      status: (status) => {
+        if (status === "Device only") setShowReconnect(true);
+        if (status === "Synced") setShowReconnect(false);
+        setSync(previous => previous === "Device only" && status === "Saving" ? previous : status);
       },
-      fetch: async (path, init) => {
-        if (!linkPaired && path === "/api/sessions") {
-          const pair = await fetch("/api/pair", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ key: linkKey }), signal: AbortSignal.timeout(15000),
-          });
-          if (!pair.ok) return pair;
-          linkPaired = true;
-          try { localStorage.setItem("form-device-key", linkKey!); } catch {}
-          window.history.replaceState(null, "", location.pathname);
-        }
-        const response = await fetch(path, init);
-        if (path === "/api/pair" && response.ok && linkKey) {
-          try { localStorage.setItem("form-device-key", linkKey); } catch {}
-          window.history.replaceState(null, "", location.pathname);
-        }
-        return response;
-      },
+      key: savedDeviceKey,
+      fetch,
     });
     journalSync.current = engine;
     void engine.flush();
@@ -312,10 +297,52 @@ export default function Home() {
       document.removeEventListener("visibilitychange", visibility);
       clearInterval(id);
     };
-  }, [loaded]);
+  }, [loaded, connectionVersion]);
+  const connectDevice = useCallback(async (key: string) => {
+    setPairing(true);
+    setPairingMessage("");
+    try {
+      const response = await pairDevice(fetch, key);
+      if (!response.ok) {
+        setPairingMessage(response.status === 403
+          ? "This device link could not be verified. Copy it again from a connected device."
+          : "Could not connect to the cloud. Try again when online.");
+        return false;
+      }
+      localStorage.setItem(deviceKeyStorage, key);
+      setPairingMessage("Device connected. Syncing your workouts and program.");
+      setConnectionVersion(version => version + 1);
+      return true;
+    } catch {
+      setPairingMessage("Could not save the connection. Check your network and allow site storage.");
+      return false;
+    } finally {
+      setPairing(false);
+    }
+  }, []);
   useEffect(() => {
-    if (loaded) journalSync.current?.schedule();
-  }, [sessions, loaded, syncTick]);
+    if (!loaded) return;
+    const connectFromUrl = async () => {
+      const link = location.href;
+      const key = deviceKeyFromLink(link, location.origin);
+      if (!key) return;
+      if (await connectDevice(key)) {
+        if (location.href === link) window.history.replaceState(null, "", location.pathname + location.search);
+      } else {
+        setSettings(true);
+      }
+    };
+    void connectFromUrl();
+    window.addEventListener("hashchange", connectFromUrl);
+    window.addEventListener("online", connectFromUrl);
+    return () => {
+      window.removeEventListener("hashchange", connectFromUrl);
+      window.removeEventListener("online", connectFromUrl);
+    };
+  }, [loaded, connectDevice]);
+  useEffect(() => {
+    if (loaded) journalSync.current?.schedule(summary ? 0 : undefined);
+  }, [sessions, loaded, summary]);
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -518,6 +545,7 @@ export default function Home() {
       finishedAt: active.finishedAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    setSync(previous => previous === "Synced" ? "Saving" : previous);
     setSessions((old) => old.map((s) => (s.id === active.id ? finished : s)));
     setActiveId(null);
     setRestEnd(null);
@@ -545,7 +573,7 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
   async function copyLink() {
-    const key = localStorage.getItem("form-device-key");
+    const key = savedDeviceKey();
     if (!key) {
       showNotice(
         "Open your original personal device link first to enable device sharing.",
@@ -691,12 +719,12 @@ export default function Home() {
                 "sync-status " + (sync === "Synced" ? "connected" : "")
               }
               onClick={() => {
-                setSyncTick((t) => t + 1);
-                showNotice(
-                  sync === "Device only"
-                    ? "Open your private device link to reconnect. Your workouts are safe on this device."
-                    : "Checking cloud backup and uploading any pending workouts.",
-                );
+                if (sync === "Device only") {
+                  setSettings(true);
+                  return;
+                }
+                journalSync.current?.schedule(0);
+                showNotice("Checking cloud backup and uploading any pending workouts.");
               }}
             >
               {sync === "Synced" ? (
@@ -1683,8 +1711,8 @@ export default function Home() {
                     {sync === "Connecting" || sync === "Saving"
                       ? "Checking the cloud for your workouts…"
                       : sync === "Device only"
-                        ? "Open your private device link on this browser to load your cloud history."
-                        : sync === "Offline"
+                        ? "Reconnect in Preferences to load your cloud history."
+                        : sync !== "Synced"
                           ? "Cloud history is unavailable right now. FORM will retry automatically."
                           : "Finish a workout and it will land here, with every set, rep, and note ready for next time."}
                   </Empty>
@@ -1825,6 +1853,29 @@ export default function Home() {
                 <i />
               </button>
             </div>
+            {showReconnect && (
+              <form className="settings-detail" onSubmit={async event => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const input = new FormData(form).get("device-link");
+                const key = typeof input === "string" ? deviceKeyFromLink(input.trim(), location.origin) : null;
+                if (!key) {
+                  setPairingMessage("Paste the private link copied from a connected FORM device.");
+                  return;
+                }
+                if (await connectDevice(key)) form.reset();
+              }}>
+                <label htmlFor="device-link">Reconnect this device</label>
+                <p>On a connected device, go to Preferences → Connect another device. Paste the link here to sync the workouts saved in this app.</p>
+                <div className="note-field">
+                  <input id="device-link" name="device-link" type="password" autoComplete="off" spellCheck={false} required />
+                </div>
+                <button className="outline-button" type="submit" disabled={pairing}>
+                  {pairing ? "Connecting…" : "Connect and sync"}
+                </button>
+              </form>
+            )}
+            {pairingMessage && <p role="status">{pairingMessage}</p>}
             <button className="preference-row" onClick={copyLink}>
               <LinkIcon size={20} />
               <div>
@@ -2056,7 +2107,9 @@ export default function Home() {
             <p className="saved-message">
               <CloudCheck size={16} />
               Saved on this device
-              {sync === "Synced"
+              {sync === "Device only"
+                ? ". Reconnect in Preferences to back up this workout."
+                : sync === "Synced"
                 ? " and backed up."
                 : ". Cloud sync will retry automatically."}
             </p>

@@ -33,7 +33,7 @@ Use a separate Neon development branch for local testing. Production project: `p
 
 Set `DATABASE_URL` to the pooled Neon URL. Generate `OWNER_KEY` with a cryptographically secure 32-byte random generator. Never commit either value.
 
-Open `https://your-domain/#key=YOUR_OWNER_KEY` once on each device. The app exchanges the link for a secure HttpOnly cookie and removes the fragment. Preferences can copy the private link for another device. Treat this link like access to your journal. It is intentionally the only device setup; there is no account or sign-in page. Without it, the cloud API rejects access; device-local logging remains available. Development without OWNER_KEY uses an isolated development owner identity.
+Open `https://your-domain/#key=YOUR_OWNER_KEY` once on each device. The app exchanges the link for a secure HttpOnly cookie and removes the fragment. Preferences can copy the private link for another device. Treat this link like access to your journal. It is intentionally the only device setup; there is no account or sign-in page. Without it, device-local logging remains available. If FORM says “Saved on device”, tap the status and paste the private link in Preferences → Reconnect this device. Do this in the browser or installed app that contains your workouts. FORM retries those workouts automatically after connecting. Development without OWNER_KEY uses an isolated development owner identity.
 
 ## Validation
 

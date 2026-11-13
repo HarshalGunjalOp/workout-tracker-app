@@ -1,3 +1,4 @@
+import { deviceRequest } from "./device-sync.ts";
 import { mergeSessions, type Session } from "./training.ts";
 
 type Options = {
@@ -19,21 +20,6 @@ export function createJournalSync(options: Options) {
       ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
       : value,
   );
-  async function request(path: string, init?: RequestInit): Promise<Response> {
-    const send = () => options.fetch(path, { ...init, cache: "no-store", signal: AbortSignal.timeout(15000) });
-    let response = await send();
-    if (response.status === 401) {
-      const key = options.key();
-      if (key) {
-        const pair = await options.fetch("/api/pair", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key }), signal: AbortSignal.timeout(15000),
-        });
-        if (pair.ok) response = await send();
-      }
-    }
-    return response;
-  }
   function schedule(delay = 400) {
     if (stopped) return;
     if (running) { queued = true; return; }
@@ -51,7 +37,7 @@ export function createJournalSync(options: Options) {
     let rejected = false;
     options.status("Saving");
     try {
-      const response = await request("/api/sessions");
+      const response = await deviceRequest(options.fetch, options.key, "/api/sessions");
       if (!response.ok) {
         options.status(response.status === 401 ? "Device only" : "Offline");
         retry = true;
@@ -69,7 +55,7 @@ export function createJournalSync(options: Options) {
         .sort((a, b) => Number(!!b.finishedAt && !b.discardedAt) - Number(!!a.finishedAt && !a.discardedAt));
       for (const session of pending) {
         if (stopped) return;
-        const saved = await request("/api/sessions", {
+        const saved = await deviceRequest(options.fetch, options.key, "/api/sessions", {
           method: "POST", headers: { "Content-Type": "application/json" },
           // The browser's keepalive quota is smaller than a valid workout.
           body: JSON.stringify(session),
@@ -84,12 +70,26 @@ export function createJournalSync(options: Options) {
           options.status(saved.status === 401 ? "Device only" : "Offline");
           return;
         }
-        acknowledged.set(session.id, signature(session));
+        const { session: stored } = await saved.json() as { session?: Session };
+        if (stopped) return;
+        if (stored?.id !== session.id || stored.updatedAt !== session.updatedAt) {
+          retry = true;
+          continue;
+        }
+        acknowledged.set(stored.id, signature(stored));
+        // The server can normalize a payload. Apply that copy only if no local
+        // edit replaced the version sent with this request.
+        const local = options.read();
+        if (signature(stored) !== signature(session) &&
+            local.some(item => item.id === session.id && signature(item) === signature(session))) {
+          options.write(local.map(item => item.id === stored.id ? stored : item));
+        }
       }
       if (stopped) return;
       const remaining = options.read().some(s => acknowledged.get(s.id) !== signature(s));
       if (rejected) options.status("Some changes need attention");
-      else if (!retry) options.status(remaining ? "Saving" : "Synced");
+      else if (retry) options.status("Cloud verification pending");
+      else options.status(remaining ? "Saving" : "Synced");
       if (remaining && !retry) queued = true;
     } catch {
       if (!stopped) options.status("Offline");

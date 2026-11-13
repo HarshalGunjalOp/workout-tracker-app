@@ -15,12 +15,13 @@ function fixture(initial: Session[]) {
     fetch: (async (path,init)=>{
       const url=String(path);
       const custom=await intercept?.(url,init);if(custom)return custom;
-      if(url==='/api/pair'){authenticated=true;return Response.json({ok:true});}
-      if(!authenticated)return new Response(null,{status:401});
+      if (!authenticated && new Headers(init?.headers).get('Authorization') !== 'Bearer saved-private-key') {
+        return new Response(null, { status: 401 });
+      }
       if(init?.method==='POST'){
         const value=JSON.parse(String(init.body));
         database.set(value.id,value);writes.push(value.id);
-        return Response.json({ok:true});
+        return Response.json({ok:true, session:value});
       }
       return Response.json([...database.values()]);
     }) as typeof fetch,
@@ -34,7 +35,7 @@ test('uploads both missing completed sessions before reporting Synced', async()=
   try { await f.engine.flush(); assert.equal(f.database.size,2);assert.equal(f.statuses.at(-1),'Synced'); }
   finally {f.engine.stop();}
 });
-test('lost authentication cookie reconnects with the saved device key and uploads',async()=>{
+test('a device with a blocked cookie uses its saved credential to upload',async()=>{
   const f=fixture([session('monday')]);f.loseCookie();
   try {await f.engine.flush();assert.equal(f.database.size,1);assert.equal(f.statuses.at(-1),'Synced');}finally{f.engine.stop();}
 });
@@ -141,6 +142,41 @@ test('large workouts use regular uploads so they fit the browser request limit',
   try {
     await f.engine.flush();
     assert.deepEqual(f.database.get(large.id), large);
+    assert.equal(f.statuses.at(-1), 'Synced');
+  } finally {
+    f.engine.stop();
+  }
+});
+
+test('a successful HTTP status without a stored workout keeps it pending', async () => {
+  const f = fixture([session('monday')]);
+  f.intercept(async (_path, init) => init?.method === 'POST'
+    ? Response.json({ ok: true })
+    : undefined);
+  try {
+    await f.engine.flush();
+    assert.equal(f.statuses.at(-1), 'Cloud verification pending');
+    assert.equal(f.local.length, 1);
+    f.intercept(undefined);
+    await f.engine.flush();
+    assert.equal(f.database.size, 1);
+    assert.equal(f.statuses.at(-1), 'Synced');
+  } finally {
+    f.engine.stop();
+  }
+});
+
+test('a server-normalized workout is acknowledged without endless uploads', async () => {
+  const f = fixture([{ ...session('monday'), note: 'original' }]);
+  const stored = { ...session('monday'), note: 'normalized' };
+  f.intercept(async (_path, init) => {
+    if (init?.method !== 'POST') return undefined;
+    f.database.set(stored.id, stored);
+    return Response.json({ ok: true, session: stored });
+  });
+  try {
+    await f.engine.flush();
+    assert.deepEqual(f.local, [stored]);
     assert.equal(f.statuses.at(-1), 'Synced');
   } finally {
     f.engine.stop();
