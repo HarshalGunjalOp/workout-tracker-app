@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Check,
   CheckCheck,
+  ChevronDown,
   Clock3,
   Flame,
   Minus,
@@ -33,12 +34,14 @@ function Stepper({
   step,
   onChange,
   unit,
+  hideLabel = false,
 }: {
   label: string;
   value: string;
   step: number;
   unit: string;
   onChange: (value: string) => void;
+  hideLabel?: boolean;
 }) {
   const change = (direction: number) =>
     onChange(
@@ -54,7 +57,7 @@ function Stepper({
     );
   return (
     <div className="quick-field">
-      <label htmlFor={`quick-${unit}`}>
+      <label className={hideLabel ? "sr-only" : undefined} htmlFor={`quick-${unit}`}>
         {label} {label.toLowerCase() !== unit && <span>{unit}</span>}
       </label>
       <div className="quick-stepper">
@@ -214,18 +217,17 @@ export function SetLogger({
   const progression = progressionTip(ex);
   const warmup = session.finishedAt ? undefined : pendingWarmup(m, ex);
   const warmupLoad = warmup?.fraction != null ? suggestedWarmupLoad(set.weight, warmup.fraction, weightStep) : undefined;
+  const warmupPercent = warmup?.fraction != null ? `${warmup.fraction * 100}%` : undefined;
   const warmupReps = warmup && `${warmup.reps} ${ex.perSide ? "reps per side" : "reps"}`;
   return (
-    <section className={"quick-logger " + (restingNow ? "is-resting " : "") + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
+    <section className={"quick-logger " + (restingNow ? "is-resting " : "") + (feedback ? "quick-logger-earned" : "")} aria-label={warmup ? "Next warm-up set" : "Next set"}>
       {navigation}
-      <div className="quick-overline">
-        <span>
-          {restingNow ? "RESTING · NEXT UP" : warmup ? "YOUR NEXT WARM-UP" : "YOUR NEXT SET"}
-        </span>
-        <span>
-          EXERCISE {mi + 1} / {session.movements.length}
-        </span>
-      </div>
+      {(!warmup || restingNow) && (
+        <div className="quick-overline">
+          <span>{restingNow ? "RESTING · NEXT UP" : "YOUR NEXT SET"}</span>
+          <span>EXERCISE {mi + 1} / {session.movements.length}</span>
+        </div>
+      )}
       {resting && (
       <div className={"rest-stage " + (restingNow ? "running" : "")} aria-label="Rest timer">
         <div className="rest-stage-heading"><Timer size={16} /><span>{restingNow ? "RECOVER" : "READY WHEN YOU ARE"}</span></div>
@@ -249,23 +251,56 @@ export function SetLogger({
       <h2 key={m.exerciseId} className="next-exercise-title" aria-live="polite">{m.name}</h2>
       {warmup ? (
         <>
-          <div className="warmup-stage" aria-live="polite">
-            <span className="warmup-stage-label"><Flame size={16} /> Warm-up {warmup.number} of {warmup.total}</span>
-            <strong>{warmupLoad !== undefined ? `${warmupLoad} kg × ` : ""}{warmupReps}</strong>
-            <p>
-              {warmup.fraction === null
-                ? "Slow, unloaded practice reps."
-                : `${warmup.fraction * 100}% of working weight${warmupLoad === undefined && Number(set.weight) > 0 ? " · use a lighter setup if available" : ""}`}
-            </p>
+          <div className="warmup-stage">
+            <div className="warmup-prescription" aria-live="polite" aria-atomic="true">
+              <div className="warmup-stage-heading">
+                <h3><Flame size={18} aria-hidden="true" /> Warm-up</h3>
+                <div className="warmup-stage-progress">
+                  <span>Set {warmup.number} of {warmup.total}</span>
+                  {warmup.total > 1 && (
+                    <div className="warmup-stage-steps" aria-hidden="true">
+                      {Array.from({ length: warmup.total }, (_, index) => (
+                        <span key={index} className={index + 1 === warmup.number ? "current" : index + 1 < warmup.number ? "done" : undefined} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <dl className="warmup-targets">
+                <div>
+                  <dt>Target load</dt>
+                  <dd>
+                    {warmupLoad === undefined ? warmupPercent ?? "Unloaded" : <>{warmupLoad} <small>kg</small></>}
+                  </dd>
+                  {warmupPercent && (
+                    <dd className="warmup-target-note">{warmupLoad !== undefined && `${warmupPercent} `}of working weight</dd>
+                  )}
+                </div>
+                <div>
+                  <dt>{ex.perSide ? "Reps per side" : "Reps"}</dt>
+                  <dd>{warmup.reps}</dd>
+                </div>
+              </dl>
+              {warmup.fraction === null && <p>Use slow, controlled reps.</p>}
+              {warmupPercent && warmupLoad === undefined && Number(set.weight) > 0 && (
+                <p>Use a lighter setup if available.</p>
+              )}
+            </div>
+            {warmupPercent && (
+              <details className="warmup-weight">
+                <summary>
+                  <span>Working weight</span>
+                  <span className="warmup-weight-value">
+                    {set.weight === "" ? "Enter kg" : Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`}
+                    <ChevronDown size={16} aria-hidden="true" />
+                  </span>
+                </summary>
+                <Stepper label="Working weight" unit="kg" value={set.weight} step={weightStep} onChange={value => onChange("weight", value)} hideLabel />
+              </details>
+            )}
           </div>
-          {warmup.fraction !== null && (
-            <details className="warmup-weight">
-              <summary>{set.weight === "" ? "Set working weight (optional)" : "Adjust working weight"}</summary>
-              <Stepper label="Working weight" unit="kg" value={set.weight} step={weightStep} onChange={value => onChange("weight", value)} />
-            </details>
-          )}
           <div className="set-action-dock">
-            <button className="lime-button quick-log" onClick={onCompleteWarmup}>Mark warm-up done <Check size={19} /></button>
+            <button className="lime-button quick-log" onClick={onCompleteWarmup}>Complete warm-up set <Check size={19} aria-hidden="true" /></button>
             {actionFooter}
           </div>
         </>

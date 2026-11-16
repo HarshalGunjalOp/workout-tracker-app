@@ -4229,32 +4229,142 @@ svg {
   color: var(--green);
 }
 .warmup-stage {
-  display: grid;
-  gap: 6px;
+  margin: 14px 0 8px;
+  background: var(--theme-surface-soft, #f2f5eb);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.warmup-prescription {
   padding: 16px;
-  background: var(--bg);
+}
+.warmup-stage-heading,
+.warmup-stage-heading h3,
+.warmup-stage-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.warmup-stage-heading {
+  justify-content: space-between;
+}
+.warmup-stage-heading h3 {
+  font-size: 15px;
+  font-weight: 750;
+}
+.warmup-stage-heading h3 svg {
+  color: var(--green);
+  flex-shrink: 0;
+}
+.warmup-stage-progress {
+  color: var(--theme-muted, #58624f);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.warmup-stage-steps {
+  display: flex;
+  gap: 3px;
+}
+.warmup-stage-steps > span {
+  width: 8px;
+  height: 5px;
+  border-radius: 4px;
+  background: var(--control-border, #c8d1bc);
+}
+.warmup-stage-steps > .done {
+  background: var(--green);
+}
+.warmup-stage-steps > .current {
+  width: 16px;
+  background: var(--green);
+}
+.warmup-targets {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  margin: 14px 0 0;
+  padding: 12px 0;
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.warmup-stage-label {
+.warmup-targets > div {
+  padding: 0 12px;
+}
+.warmup-targets > div + div {
+  border-inline-start: 1px solid var(--line);
+}
+.warmup-targets dt,
+.warmup-targets .warmup-target-note,
+.warmup-prescription p {
+  color: var(--theme-muted, #58624f);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.warmup-targets dt {
+  font-weight: 650;
+}
+.warmup-targets dd {
+  margin: 3px 0 0;
+  font-size: clamp(22px, 6vw, 32px);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.warmup-targets dd small {
+  font-size: 14px;
+  letter-spacing: normal;
+}
+.warmup-targets .warmup-target-note {
+  margin-top: 4px;
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.warmup-prescription p {
+  margin-top: 10px;
+}
+.warmup-weight {
+  border-top: 1px solid var(--line);
+}
+.warmup-weight > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 46px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+.warmup-weight > summary::-webkit-details-marker {
+  display: none;
+}
+.warmup-weight > summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -3px;
+  border-radius: 10px;
+}
+.warmup-weight-value {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--green);
-  font-size: 13px;
-  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
-.warmup-stage > strong { font-size: 24px; }
-.warmup-stage p { margin: 0; font-size: 13px; }
-.warmup-weight > summary {
-  display: list-item;
-  align-content: center;
-  min-height: 44px;
-  cursor: pointer;
-  color: var(--green);
-  font-size: 13px;
+.warmup-weight[open] .warmup-weight-value svg {
+  transform: rotate(180deg);
 }
-.warmup-weight .quick-field { max-width: 260px; }
+.warmup-weight .quick-field {
+  max-width: 320px;
+  padding: 0 16px 16px;
+}
+.warmup-weight .quick-stepper button {
+  min-width: 44px;
+}
 .deferred-exercises {
   margin-bottom: 12px;
   padding: 10px 14px;
