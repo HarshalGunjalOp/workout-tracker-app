@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PLAN as CURRENT_PLAN, nextDay, totalSets, workoutDay } from "../lib/plan.ts";
 import { LEGACY_PLAN as PLAN } from "../lib/legacy-plan.ts";
+import { sessionSchema } from "../lib/schema.ts";
 import {
   makeSession,
   supersetFocus,
@@ -10,6 +11,10 @@ import {
   mergeSessions,
   volume,
   completedSets,
+  nextWorkoutFocus,
+  pendingWarmup,
+  remainingSets,
+  suggestedWarmupLoad,
   previousMovement,
   localDate,
   editSet,
@@ -405,4 +410,46 @@ test("new neck exercises start unloaded even when the old plan logged plate work
   assert.deepEqual(neck.sets, Array.from({ length: 2 }, () => ({ weight: "0", reps: "12", done: false })));
   neck.sets = neck.sets.map(() => ({ weight: "1", reps: "20", done: true }));
   assert.equal(canProgress(neck, day.exercises.at(-1)!), false);
+});
+
+test("ramp progress survives session validation without adding working sets or volume", () => {
+  const day = CURRENT_PLAN[0];
+  const session = makeSession(day, [], crypto.randomUUID(), now);
+  const movement = session.movements[0];
+  const ex = day.exercises[0];
+  assert.deepEqual(pendingWarmup(movement, ex), { fraction: 0.4, reps: "8–10", number: 1, total: 3 });
+  assert.equal(suggestedWarmupLoad("", 0.4, 2.5), undefined);
+  assert.equal(suggestedWarmupLoad("0", 0.4, 2.5), undefined);
+  assert.equal(suggestedWarmupLoad("37.5", 0.8, 2.5), 30);
+  assert.equal(suggestedWarmupLoad("10", 0.8, 5), 5);
+  assert.equal(suggestedWarmupLoad("2.5", 0.8, 2.5), undefined);
+  movement.warmupsDone = 1;
+  session.generalWarmupDone = true;
+  session.deferredExerciseIds = [ex.id];
+  const restored = sessionSchema.parse(JSON.parse(JSON.stringify(session)));
+  assert.equal(restored.generalWarmupDone, true);
+  assert.deepEqual(pendingWarmup(restored.movements[0], ex), { fraction: 0.6, reps: "5", number: 2, total: 3 });
+  assert.equal(nextWorkoutFocus(restored, day), 1);
+  assert.equal(completedSets(restored), 0);
+  assert.equal(volume(restored), 0);
+  assert.equal(remainingSets(restored), totalSets(day));
+  restored.movements[0].warmupsDone = 3;
+  assert.equal(pendingWarmup(restored.movements[0], ex), undefined);
+});
+
+test("warm-up variants preserve unloaded practice, optional ramps and legacy logging", () => {
+  const day = CURRENT_PLAN[1];
+  const session = makeSession(day, [], crypto.randomUUID(), now);
+  const movement = session.movements.at(-1)!;
+  const ex = day.exercises.at(-1)!;
+  assert.deepEqual(pendingWarmup(movement, ex), { fraction: null, reps: "5–8", number: 1, total: 1 });
+  assert.equal(pendingWarmup(movement, { ...ex, warmupCode: "W0" }), undefined);
+  assert.equal(pendingWarmup(movement, { ...ex, timed: true }), undefined);
+  assert.equal(pendingWarmup(movement, { ...ex, warmupCode: undefined }), undefined);
+  assert.equal(pendingWarmup(movement, { ...ex, warmupCode: "W1" })?.reps, "8–12");
+  movement.warmupsDone = 1;
+  assert.deepEqual(pendingWarmup(movement, { ...ex, warmupCode: "W2" }), { fraction: 0.75, reps: "3–4", number: 2, total: 2 });
+  delete movement.warmupsDone;
+  movement.sets[0].done = true;
+  assert.equal(pendingWarmup(movement, ex), undefined);
 });

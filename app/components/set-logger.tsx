@@ -6,6 +6,8 @@ import {
   ArrowRight,
   Check,
   CheckCheck,
+  Clock3,
+  Flame,
   Minus,
   Plus,
   RotateCcw,
@@ -15,6 +17,8 @@ import { readWeightSteps } from "@/lib/weight-steps";
 import { WARMUPS, progressionTip, repUnit, type Exercise } from "@/lib/plan";
 import {
   canProgress,
+  pendingWarmup,
+  suggestedWarmupLoad,
   supersetPartner,
   type MovementLog,
   type Session,
@@ -97,6 +101,10 @@ export function SetLogger({
   onChange,
   onLog,
   onUndo,
+  onDefer,
+  nextSupersetMovement,
+  onContinueSuperset,
+  onCompleteWarmup,
   onNavigate,
   onEdit,
   weightIncrement,
@@ -116,6 +124,10 @@ export function SetLogger({
   onChange: (field: "weight" | "reps", value: string) => void;
   onLog: () => void;
   onUndo: () => void;
+  onDefer?: () => void;
+  nextSupersetMovement?: string;
+  onContinueSuperset: () => void;
+  onCompleteWarmup: () => void;
   onNavigate: (offset: number) => void;
   onEdit: (si: number, weight: string, reps: string) => void;
   weightIncrement?: number;
@@ -150,10 +162,32 @@ export function SetLogger({
       </button>)}
     </div>
   );
+  const actionFooter = (
+    <div className="quick-footer">
+      {canUndo ? (
+        <button className="quick-undo" onClick={onUndo}>
+          <RotateCcw size={16} /> Undo last set
+        </button>
+      ) : <span>Saved automatically</span>}
+      {onDefer && <button onClick={onDefer}><Clock3 size={16} /> Do later</button>}
+    </div>
+  );
   if (editing !== null) return (
     <section className="quick-logger" aria-label="Edit set">
       {navigation}<h2>{m.name}</h2>{setPicker}
       <InlineSetEditor key={editing} set={m.sets[editing]} si={editing} timed={!!ex.timed} onCancel={() => setEditing(null)} onSave={(weight, reps) => { onEdit(editing, weight, reps); setEditing(null); }} />
+    </section>
+  );
+  if (nextSupersetMovement) return (
+    <section className="quick-logger" aria-label="Superset">
+      {navigation}
+      <h2>{m.name}</h2>
+      {setPicker}
+      <p className="quick-context">Next in this round: {nextSupersetMovement}</p>
+      <div className="set-action-dock">
+        <button className="lime-button quick-log" onClick={onContinueSuperset}>Continue superset <ArrowRight size={18} /></button>
+        {actionFooter}
+      </div>
     </section>
   );
   if (!set) return (
@@ -178,12 +212,15 @@ export function SetLogger({
   const ready = ex.progression && progressionHistory && canProgress(progressionHistory, ex);
   const firstWorkingSet = !m.sets.some(s => s.done);
   const progression = progressionTip(ex);
+  const warmup = session.finishedAt ? undefined : pendingWarmup(m, ex);
+  const warmupLoad = warmup?.fraction != null ? suggestedWarmupLoad(set.weight, warmup.fraction, weightStep) : undefined;
+  const warmupReps = warmup && `${warmup.reps} ${ex.perSide ? "reps per side" : "reps"}`;
   return (
     <section className={"quick-logger " + (restingNow ? "is-resting " : "") + (feedback ? "quick-logger-earned" : "")} aria-label="Next set">
       {navigation}
       <div className="quick-overline">
         <span>
-          {resting && seconds > 0 ? "RESTING · NEXT UP" : "YOUR NEXT SET"}
+          {restingNow ? "RESTING · NEXT UP" : warmup ? "YOUR NEXT WARM-UP" : "YOUR NEXT SET"}
         </span>
         <span>
           EXERCISE {mi + 1} / {session.movements.length}
@@ -193,7 +230,7 @@ export function SetLogger({
       <div className={"rest-stage " + (restingNow ? "running" : "")} aria-label="Rest timer">
         <div className="rest-stage-heading"><Timer size={16} /><span>{restingNow ? "RECOVER" : "READY WHEN YOU ARE"}</span></div>
         <strong className="rest-stage-clock" role="timer" aria-label={restingNow ? `${seconds} seconds remaining` : "Rest complete"}>{restingNow ? clock(seconds) : "Ready"}</strong>
-        <p>Next: {ex.timed ? `${set.reps}s hold` : `${set.weight === "" ? "Choose weight" : Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`} × ${set.reps}`}</p>
+        <p>Next: {warmup ? `warm-up · ${warmupReps}` : ex.timed ? `${set.reps}s hold` : `${set.weight === "" ? "Choose weight" : Number(set.weight) === 0 ? "Bodyweight" : `${set.weight} kg`} × ${set.reps}`}</p>
         <div className="rest-stage-controls">
           <button onClick={onRestMore}>+15s</button>
           <button onClick={onRestSkip}>End rest</button>
@@ -210,8 +247,32 @@ export function SetLogger({
         </div>
       )}
       <h2 key={m.exerciseId} className="next-exercise-title" aria-live="polite">{m.name}</h2>
-      {!ex.timed && ex.warmupCode && firstWorkingSet && (
-        <div className="form-cue"><span>Warm-up · {WARMUPS[ex.warmupCode]}</span></div>
+      {warmup ? (
+        <>
+          <div className="warmup-stage" aria-live="polite">
+            <span className="warmup-stage-label"><Flame size={16} /> Warm-up {warmup.number} of {warmup.total}</span>
+            <strong>{warmupLoad !== undefined ? `${warmupLoad} kg × ` : ""}{warmupReps}</strong>
+            <p>
+              {warmup.fraction === null
+                ? "Slow, unloaded practice reps."
+                : `${warmup.fraction * 100}% of working weight${warmupLoad === undefined && Number(set.weight) > 0 ? " · use a lighter setup if available" : ""}`}
+            </p>
+          </div>
+          {warmup.fraction !== null && (
+            <details className="warmup-weight">
+              <summary>{set.weight === "" ? "Set working weight (optional)" : "Adjust working weight"}</summary>
+              <Stepper label="Working weight" unit="kg" value={set.weight} step={weightStep} onChange={value => onChange("weight", value)} />
+            </details>
+          )}
+          <div className="set-action-dock">
+            <button className="lime-button quick-log" onClick={onCompleteWarmup}>Mark warm-up done <Check size={19} /></button>
+            {actionFooter}
+          </div>
+        </>
+      ) : (
+      <>
+      {!ex.timed && ex.warmupCode === "W0" && firstWorkingSet && (
+        <div className="form-cue"><span>{WARMUPS.W0}</span></div>
       )}
       {partner && (
         <p className="superset-next">
@@ -311,15 +372,7 @@ export function SetLogger({
               : "Choose your weight to log"}
         </span>
       </button>
-      <div className="quick-footer">
-        {canUndo ? (
-          <button className="quick-undo" onClick={onUndo}>
-            <RotateCcw size={16} /> Undo last set
-          </button>
-        ) : (
-          <span>Saved automatically</span>
-        )}
-      </div>
+      {actionFooter}
       </div>
       <details className="quick-cue">
         <summary>
@@ -329,6 +382,8 @@ export function SetLogger({
         {progression && <p>{progression}</p>}
         {previous?.note && <p>Last time: {previous.note}</p>}
       </details>
+      </>
+      )}
     </section>
   );
 }

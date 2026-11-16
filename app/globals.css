@@ -4224,6 +4224,53 @@ svg {
 .quick-stepper input { transition:font-size .2s ease; font-variant-numeric:tabular-nums; }
 .set-action-dock { margin-top:16px; }
 .set-action-dock .quick-footer { margin-top:4px; }
+.set-action-dock .quick-footer button {
+  padding-inline: 10px;
+  color: var(--green);
+}
+.warmup-stage {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.warmup-stage-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 650;
+}
+.warmup-stage > strong { font-size: 24px; }
+.warmup-stage p { margin: 0; font-size: 13px; }
+.warmup-weight > summary {
+  display: list-item;
+  align-content: center;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--green);
+  font-size: 13px;
+}
+.warmup-weight .quick-field { max-width: 260px; }
+.deferred-exercises {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 12px;
+}
+.deferred-exercises ul { margin: 4px 0 0; padding-left: 16px; }
+.resume-banner .resume-workout-info { display: grid; gap: 3px; }
+.resume-banner .resume-workout-info strong { font-size: 14px; }
+.resume-banner .resume-workout-info small { font-size: 12px; }
+.week-mini > .partial-day,
+.day-partial > div:first-child > svg { color: var(--green); }
+.week-mini > .partial-day { border-style: dashed; }
+.day-partial .tile-bottom { color: var(--green); }
 @media (max-width:700px) {
   .app-shell:has(.workout-content) .topbar { display:none; }
   .workout-content { padding:16px 16px calc(160px + env(safe-area-inset-bottom)); }

@@ -1,12 +1,25 @@
 import { LEGACY_PLAN } from "./legacy-plan.ts";
 
+export const WARMUP_SETS = {
+  W3: [{ fraction: 0.4, reps: "8–10" }, { fraction: 0.6, reps: "5" }, { fraction: 0.8, reps: "2–3" }],
+  W2: [{ fraction: 0.5, reps: "8" }, { fraction: 0.75, reps: "3–4" }],
+  W1: [{ fraction: 0.5, reps: "8–12" }],
+  W0: [],
+  WN: [{ fraction: null, reps: "5–8" }],
+};
+
+function rampDescription(sets: { fraction: number; reps: string }[]) {
+  const prescription = sets.map(set => `${set.fraction * 100}% × ${set.reps}`).join(", ");
+  return `${sets.length} ramp ${sets.length === 1 ? "set" : "sets"} · ${prescription}`;
+}
+
 export const WARMUPS = {
-  W3: "3 ramp sets · 40% × 8–10, 60% × 5, 80% × 2–3",
-  W2: "2 ramp sets · 50% × 8, 75% × 3–4",
-  W1: "1 ramp set · 50% × 8–12",
+  W3: rampDescription(WARMUP_SETS.W3),
+  W2: rampDescription(WARMUP_SETS.W2),
+  W1: rampDescription(WARMUP_SETS.W1),
   W0: "No scheduled ramp set. Add a light set if needed.",
-  WN: "5–8 slow, unloaded practice reps",
-} as const;
+  WN: `${WARMUP_SETS.WN[0].reps} slow, unloaded practice reps`,
+};
 
 export const LEGACY_DAY_IDS = ["upper", "lower-a", "push", "pull", "lower-b"] as const;
 export const DAY_IDS = ["upper-a-v2", "lower-a-v2", "upper-b-v2", "lower-b-v2", "upper-c-v2"] as const;
@@ -40,7 +53,7 @@ export type Day = {
   exercises: Exercise[];
 };
 
-const workingWeight = "Warm-up percentages use your planned working weight. Keep ramp sets easy and log only working sets.";
+const workingWeight = "Warm-up percentages use your planned working weight. Keep ramp sets easy.";
 const oneRepLeft = " Stop with about one rep in reserve.";
 const technicalFailure = " Strict technical failure is optional if tolerated.";
 

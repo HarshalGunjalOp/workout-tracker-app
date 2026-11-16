@@ -1,9 +1,10 @@
-import type { Day, Exercise } from "./plan";
+import { WARMUP_SETS, type Day, type Exercise } from "./plan.ts";
 export type SetLog = { weight: string; reps: string; done: boolean };
 export type MovementLog = {
   exerciseId: string;
   name: string;
   sets: SetLog[];
+  warmupsDone?: number;
   note: string;
 };
 export type Session = {
@@ -15,6 +16,8 @@ export type Session = {
   discardedAt?: string;
   updatedAt: string;
   movements: MovementLog[];
+  generalWarmupDone?: boolean;
+  deferredExerciseIds?: string[];
   note: string;
 };
 export const movementsFor = (ex: Exercise) =>
@@ -112,6 +115,24 @@ export function canProgress(m: MovementLog, ex: Exercise): boolean {
 }
 export const completedSets = (s: Session) =>
   s.movements.reduce((a, m) => a + m.sets.filter((s) => s.done).length, 0);
+export const remainingSets = (s: Session) =>
+  s.movements.reduce((n, m) => n + m.sets.length, 0) - completedSets(s);
+
+export function pendingWarmup(movement: MovementLog, ex: Exercise) {
+  if (ex.timed || !ex.warmupCode || movement.sets.some(s => s.done)) return;
+  const sets = WARMUP_SETS[ex.warmupCode];
+  const index = movement.warmupsDone ?? 0;
+  const set = sets[index];
+  if (set) return { ...set, number: index + 1, total: sets.length };
+}
+
+export function suggestedWarmupLoad(weight: string, fraction: number, increment: number) {
+  const working = Number(weight);
+  if (!(working > 0) || !Number.isFinite(working)) return;
+  // A rounded ramp set needs to stay lighter than the working set.
+  const steps = Math.min(Math.max(1, Math.round(working * fraction / increment)), Math.ceil(working / increment) - 1);
+  if (steps > 0) return Number((steps * increment).toFixed(6));
+}
 export const volume = (s: Session) =>
   s.movements
     .filter((m) => s.programDay
@@ -209,19 +230,20 @@ export function supersetPartner(session: Session, ex: Exercise, mi: number) {
 
 // Pending exercise groups, with deferred groups moved to the back. Supersets
 // stay together and supersetFocus chooses the next unfinished round.
-export function workoutQueue(session: Session, day: Day, deferred: string[] = []) {
+export function workoutQueue(session: Session, day: Day, deferred = session.deferredExerciseIds ?? []) {
   const pending = day.exercises.filter(ex =>
     movementsFor(ex).some(part => session.movements.some(m =>
       m.exerciseId === part.id && m.sets.some(s => !s.done))),
   );
   return [
     ...pending.filter(ex => !deferred.includes(ex.id)),
-    ...deferred.flatMap(id => pending.filter(ex => ex.id === id)),
+    ...pending.filter(ex => deferred.includes(ex.id))
+      .sort((a, b) => deferred.indexOf(a.id) - deferred.indexOf(b.id)),
   ];
 }
 
 export function nextWorkoutFocus(
-  session: Session, day: Day, deferred: string[] = [], currentId?: string | null,
+  session: Session, day: Day, deferred = session.deferredExerciseIds ?? [], currentId?: string | null,
 ) {
   const queue = workoutQueue(session, day, deferred);
   const preferred = queue.find(ex => movementsFor(ex).some(m => m.id === currentId));

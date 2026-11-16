@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  CircleMinus,
   Plus,
   Minus,
   X,
@@ -49,9 +50,12 @@ import {
   movementsFor,
   supersetFocus,
   supersetPartner,
+  workoutQueue,
   editSet,
   previousMovement,
   completedSets,
+  pendingWarmup,
+  remainingSets,
   volume,
   duration,
   canProgress,
@@ -76,6 +80,7 @@ const date = (
 const clock = (s: number) =>
   `${Math.floor(Math.max(0, s) / 60)}:${String(Math.max(0, s) % 60).padStart(2, "0")}`;
 const storage = "form-training-v1";
+const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 function Emblem({ small = false }: { small?: boolean }) {
   return (
     <div className={"emblem " + (small ? "small" : "")} aria-hidden="true">
@@ -135,7 +140,6 @@ export default function Home() {
     [restLength, setRestLength] = useState(90),
     [now, setNow] = useState(Date.now()),
     [expanded, setExpanded] = useState<string | null>(null),
-    [warmup, setWarmup] = useState(false),
     [saveError, setSaveError] = useState(false);
   const program = useProgram(loaded);
   const [editingDay, setEditingDay] = useState<Day | null>(null);
@@ -185,7 +189,6 @@ export default function Home() {
     const timer = setTimeout(() => setCelebration(null), 2600);
     return () => clearTimeout(timer);
   }, [celebration]);
-  const [deferred, setDeferred] = useState<string[]>([]);
   const [setFeedback, setSetFeedback] = useState<{
     id: number; name: string; complete: boolean; count: number;
   } | null>(null);
@@ -210,6 +213,10 @@ export default function Home() {
   const active = sessions.find((s) => s.id === activeId),
     history = sessions.filter((s) => s.finishedAt && !s.discardedAt),
     day = active?.programDay ?? (active ? workoutDay(active.dayId) : selectedDay) ?? selectedDay;
+  const draft = sessions.find((s) => !s.finishedAt && !s.discardedAt);
+  const draftDay = draft && (draft.programDay ?? workoutDay(draft.dayId));
+  const draftNext = draft && draftDay && draft.movements[nextWorkoutFocus(draft, draftDay)];
+  const draftRemaining = draft ? remainingSets(draft) : 0;
   const comparableHistory = active ? history.filter(s => s.dayId === day.id) : [];
   const showNotice = useCallback((s: string) => setNotice(s), []);
   useEffect(() => {
@@ -222,7 +229,6 @@ export default function Home() {
           setActiveId(data.activeId ?? null);
           const focus = data.focus?.sessionId === data.activeId ? data.focus : null;
           setExpanded(typeof focus?.exerciseId === "string" ? focus.exerciseId : null);
-          setDeferred(Array.isArray(focus?.deferred) ? focus.deferred.filter((id: unknown) => typeof id === "string") : []);
           setRestEnd(data.restEnd ?? null);
         }
         setSound(data.sound !== false);
@@ -258,13 +264,13 @@ export default function Home() {
     try {
       localStorage.setItem(
         storage,
-        JSON.stringify({ sessions, activeId, restEnd, sound, focus: { sessionId: activeId, exerciseId: expanded, deferred } }),
+        JSON.stringify({ sessions, activeId, restEnd, sound, focus: { sessionId: activeId, exerciseId: expanded } }),
       );
       setSaveError(false);
     } catch {
       setSaveError(true);
     }
-  }, [sessions, activeId, loaded, restEnd, sound, expanded, deferred]);
+  }, [sessions, activeId, loaded, restEnd, sound, expanded]);
   useEffect(() => {
     if (!loaded) return;
     const engine = createJournalSync({
@@ -397,19 +403,22 @@ export default function Home() {
       ),
     );
   }
+  function resumeDraft() {
+    if (!draft) return;
+    setNow(Date.now());
+    setActiveId(draft.id);
+    setExpanded(draftNext?.exerciseId ?? null);
+    setSetFeedback(null);
+    window.scrollTo({ top: 0 });
+  }
   function start(d: Day) {
     setNow(Date.now());
     if (activeId) {
       showNotice("Finish or resume your current workout first.");
       return;
     }
-    const draft = sessions.find((s) => !s.finishedAt && !s.discardedAt);
     if (draft) {
-      setActiveId(draft.id);
-      setExpanded(
-        draft.movements.find((m) => m.sets.some((s) => !s.done))?.exerciseId ??
-          null,
-      );
+      resumeDraft();
       return;
     }
     const s = makeSession(
@@ -418,12 +427,10 @@ export default function Home() {
       crypto.randomUUID(),
       new Date().toISOString(),
     );
-    setDeferred([]);
     setSetFeedback(null);
     setSessions((old) => [s, ...old]);
     setActiveId(s.id);
     setExpanded(s.movements[0].exerciseId);
-    setWarmup(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function initAudio() {
@@ -446,16 +453,32 @@ export default function Home() {
     update((s) => editSet(s, mi, si, field, value, carryForward));
   }
   function toggleSet(mi: number, si: number, ex: Exercise) {
-    const set = active!.movements[mi].sets[si];
+    if (!active) return;
+    const movement = active.movements[mi];
+    const set = movement.sets[si];
+    if (!set.done && !active.finishedAt) {
+      const nextMi = supersetFocus(active, ex, mi);
+      if (ex.superset && (mi !== nextMi || si !== movement.sets.findIndex(s => !s.done))) {
+        setExpanded(active.movements[nextMi].exerciseId);
+        revealNextExercise();
+        showNotice("Log the next superset set in round order.");
+        return;
+      }
+      if (pendingWarmup(movement, ex)) {
+        setExpanded(movement.exerciseId);
+        revealNextExercise();
+        return;
+      }
+    }
     if (
       !set.done &&
-      (!set.reps || Number(set.reps) <= 0 || (!ex.timed && set.weight === ""))
+      (Number(set.reps) <= 0 || (!ex.timed && (!set.weight || !Number.isFinite(Number(set.weight)))))
     ) {
       showNotice("Enter weight (0 for bodyweight) and reps to log this set.");
       return;
     }
     initAudio();
-    update((s) => ({
+    const toggle = (s: Session): Session => ({
       ...s,
       movements: s.movements.map((m, i) =>
         i === mi
@@ -467,25 +490,26 @@ export default function Home() {
             }
           : m,
       ),
-    }));
+    });
+    update(toggle);
+    const changed = toggle(active);
     if (!set.done) {
       setNow(Date.now());
       navigator.vibrate?.(30);
-      setLastLogged({ sessionId: active!.id, mi, si });
+      setLastLogged({ sessionId: active.id, mi, si });
       setRestLength(ex.rest);
-      const hasRemaining = active!.movements.some((m, i) =>
-        m.sets.some((s, j) => !s.done && !(i === mi && j === si)),
-      );
-      const partner = supersetPartner(active!, ex, mi);
+      const hasRemaining = remainingSets(changed) > 0;
+      const partner = supersetPartner(active, ex, mi);
       const roundContinues = partner?.sets[si] && !partner.sets[si].done;
       setRestEnd(
         hasRemaining && !roundContinues ? Date.now() + ex.rest * 1000 : null,
       );
-      const pr = ex.progression !== "N" && isRecord(sessions, active!, mi, si, !!ex.timed);
-      const movementComplete = active!.movements[mi].sets.every((s, i) => s.done || i === si);
+      const pr = ex.progression !== "N" && isRecord(sessions, active, mi, si, !!ex.timed);
+      const movementComplete = changed.movements[mi].sets.every(s => s.done);
       if (pr || !hasRemaining) setCelebration({ id: Date.now(), pr, name: pr ? "NEW PR" : "WORKOUT COMPLETE" });
-      setSetFeedback({ id: Date.now(), name: active!.movements[mi].name, complete: movementComplete, count: active!.movements[mi].sets.length });
+      setSetFeedback({ id: Date.now(), name: movement.name, complete: movementComplete, count: movement.sets.length });
     }
+    return changed;
   }
 
   function finish() {
@@ -506,6 +530,14 @@ export default function Home() {
     setSummary(finished);
     setTab("today");
   }
+  function pauseWorkout() {
+    setFinishPrompt(false);
+    setActiveId(null);
+    setRestEnd(null);
+    restWasRunning.current = false;
+    setTab("today");
+    window.scrollTo({ top: 0 });
+  }
   function exportData() {
     const url = URL.createObjectURL(
       new Blob(
@@ -525,37 +557,42 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
   }
-  const week = history.filter((s) => localDate(s.startedAt) >= weekStart()),
-    weekDays = new Set(week.map((s) => s.dayId)),
-    weekCount = new Set(week.map(s => localDate(s.startedAt))).size,
-    done = active ? completedSets(active) : 0,
-    total = active
-      ? active.movements.reduce((n, m) => n + m.sets.length, 0)
-      : 0;
-  const selectedMi =
-    active?.movements.findIndex(
-      (m) => m.exerciseId === expanded,
-    ) ?? -1;
-  const candidateMi =
-    selectedMi >= 0
-      ? selectedMi
-      : (active ? Math.max(0, nextWorkoutFocus(active, day, deferred)) : -1);
-  const candidateEx = day.exercises.find(
-    (e) =>
-      e.id === active?.movements[candidateMi]?.exerciseId ||
-      (e.superset &&
-        movementsFor(e).some(
-          (m) => m.id === active?.movements[candidateMi]?.exerciseId,
-        )),
-  );
-  const focusMi = selectedMi >= 0 ? selectedMi : active ? supersetFocus(active, candidateEx, candidateMi) : -1;
+  const weekBeginning = weekStart(new Date(now));
+  const week = history.filter((s) => localDate(s.startedAt) >= weekBeginning);
+  const fullWorkouts = week.filter(s => remainingSets(s) === 0);
+  const weekCount = new Set(fullWorkouts.map(s => localDate(s.startedAt))).size;
+  const completedDays = new Set(fullWorkouts.map(s => s.dayId));
+  const savedDays = new Set(week.map(s => s.dayId));
+  const completedWeekdays = new Set(fullWorkouts.map(s => date(s.startedAt, { weekday: "short" })));
+  const savedWeekdays = new Set(week.map(s => date(s.startedAt, { weekday: "short" })));
+  const deferred = active?.deferredExerciseIds ?? [];
+  const queue = active ? workoutQueue(active, day) : [];
+  const deferredExercises = queue.filter(ex => deferred.includes(ex.id));
+  const nextMi = active ? nextWorkoutFocus(active, day) : -1;
+  const nextMovement = active?.movements[nextMi];
+  const done = active ? completedSets(active) : 0,
+    remaining = active ? remainingSets(active) : 0,
+    total = done + remaining;
+  const selectedMi = active?.movements.findIndex(m => m.exerciseId === expanded) ?? -1;
+  const focusMi = selectedMi >= 0 ? selectedMi : Math.max(0, nextMi);
   const focusMovement = active?.movements[focusMi];
   const focusEx = day.exercises.find(
-    (e) =>
-      focusMovement?.exerciseId === e.id ||
-      (e.superset && focusMovement?.exerciseId.startsWith(e.id + "-")),
+    ex => movementsFor(ex).some(part => part.id === focusMovement?.exerciseId),
   );
   const focusSi = focusMovement?.sets.findIndex((s) => !s.done) ?? -1;
+  const nextRoundMi = active && !active.finishedAt ? supersetFocus(active, focusEx, focusMi) : focusMi;
+  const canDefer = queue.some(ex => ex.id !== focusEx?.id);
+  function focusExercise(mi: number) {
+    setExpanded(active?.movements[mi]?.exerciseId ?? null);
+    setSetFeedback(null);
+    revealNextExercise();
+  }
+  function deferExercise() {
+    if (!active || !focusEx || !canDefer) return;
+    const nextDeferred = [...deferred.filter(id => id !== focusEx.id), focusEx.id];
+    update(s => ({ ...s, deferredExerciseIds: nextDeferred }));
+    focusExercise(nextWorkoutFocus(active, day, nextDeferred));
+  }
   const canUndo = !!(
     active &&
     lastLogged?.sessionId === active.id &&
@@ -707,14 +744,15 @@ export default function Home() {
             >
               <summary>
                 <Flame size={16} /> Warm-up{" "}
-                <span>{warmup ? "Done" : "Tap to view"}</span>
+                <span>{active.generalWarmupDone ? "Done" : "Tap to view"}</span>
               </summary>
               <button
-                className={"warmup " + (warmup ? "warmup-done" : "")}
-                onClick={() => setWarmup((v) => !v)}
+                className={"warmup " + (active.generalWarmupDone ? "warmup-done" : "")}
+                aria-pressed={!!active.generalWarmupDone}
+                onClick={() => update(s => ({ ...s, generalWarmupDone: !s.generalWarmupDone }))}
               >
                 <span className="warmup-check">
-                  {warmup ? <Check size={15} /> : <Flame size={17} />}
+                  {active.generalWarmupDone ? <Check size={15} /> : <Flame size={17} />}
                 </span>
                 <span>
                   <strong>Get warm. Move well.</strong>
@@ -722,6 +760,20 @@ export default function Home() {
                 </span>
               </button>
             </details>
+            {deferredExercises.length > 0 && (
+              <section className="deferred-exercises" aria-label="Deferred exercises">
+                <strong>Do later</strong>
+                <ul>
+                  {deferredExercises.map(ex => {
+                    const ids = movementsFor(ex).map(part => part.id);
+                    const count = active.movements
+                      .filter(m => ids.includes(m.exerciseId))
+                      .reduce((n, m) => n + m.sets.filter(s => !s.done).length, 0);
+                    return <li key={ex.id}>{ex.name} · {count} {count === 1 ? "set" : "sets"} left</li>;
+                  })}
+                </ul>
+              </section>
+            )}
             <div className="logger-anchor">
             <SetLogger
               key={`${active.id}-${focusMovement?.exerciseId}`}
@@ -753,30 +805,30 @@ export default function Home() {
               seconds={seconds}
               resting={restEnd !== null}
               canUndo={canUndo}
+              onDefer={!active.finishedAt && canDefer ? deferExercise : undefined}
+              nextSupersetMovement={nextRoundMi !== focusMi ? active.movements[nextRoundMi]?.name : undefined}
+              onContinueSuperset={() => focusExercise(nextRoundMi)}
+              onCompleteWarmup={() => {
+                if (!focusMovement || !focusEx) return;
+                update(s => ({
+                  ...s,
+                  movements: s.movements.map((m, i) => {
+                    const warmup = i === focusMi ? pendingWarmup(m, focusEx) : undefined;
+                    return warmup ? { ...m, warmupsDone: warmup.number } : m;
+                  }),
+                }));
+              }}
               onChange={(field, value) =>
                 setValue(focusMi, focusSi, field, value, true)
               }
               onLog={() => {
                 if (!focusEx || Date.now() - lastLogTime.current < 600) return;
                 lastLogTime.current = Date.now();
-                toggleSet(focusMi, focusSi, focusEx);
-                const logged = {
-                  ...active,
-                  movements: active.movements.map((m, i) =>
-                    i !== focusMi
-                      ? m
-                      : {
-                          ...m,
-                          sets: m.sets.map((set, j) =>
-                            j === focusSi ? { ...set, done: true } : set,
-                          ),
-                        },
-                  ),
-                };
-                const nextMi = nextWorkoutFocus(logged, day, deferred, focusMovement?.exerciseId);
-                setExpanded(logged.movements[nextMi]?.exerciseId ?? null);
-                if (nextMi !== focusMi) revealNextExercise();
-
+                const logged = toggleSet(focusMi, focusSi, focusEx);
+                if (!logged) return;
+                const next = nextWorkoutFocus(logged, day, deferred, focusMovement?.exerciseId);
+                if (next >= 0) setExpanded(logged.movements[next].exerciseId);
+                if (next !== focusMi) revealNextExercise();
               }}
               onUndo={() => {
                 if (!lastLogged || !canUndo) return;
@@ -1225,24 +1277,17 @@ export default function Home() {
                     <span /> THE V-TAPER PROJECT
                   </div>
                 </div>
-                {sessions.find((s) => !s.finishedAt && !s.discardedAt) && (
-                  <button
-                    className="resume-banner"
-                    onClick={() => {
-                      const s = sessions.find(
-                        (s) => !s.finishedAt && !s.discardedAt,
-                      )!;
-                      setActiveId(s.id);
-                      setExpanded(
-                        s.movements.find((m) => !m.sets.every((s) => s.done))
-                          ?.exerciseId ?? s.movements[0].exerciseId,
-                      );
-                    }}
-                  >
+                {draft && (
+                  <button className="resume-banner" onClick={resumeDraft}>
                     <span className="live-dot" />
-                    <strong>Your workout is right where you left it.</strong>
+                    <span className="resume-workout-info">
+                      <strong>{draftDay?.title ?? "Workout"} in progress</strong>
+                      <small>
+                        {draftNext ? `${draftNext.name} · ${draftRemaining} remaining ${draftRemaining === 1 ? "set" : "sets"}` : "All sets logged · ready to save"}
+                      </small>
+                    </span>
                     <span>
-                      Resume session <ArrowRight size={16} />
+                      Resume <ArrowRight size={16} />
                     </span>
                   </button>
                 )}
@@ -1272,7 +1317,7 @@ export default function Home() {
                         className="lime-button"
                         onClick={() => start(selectedDay)}
                       >
-                        {sessions.some((s) => !s.finishedAt && !s.discardedAt)
+                        {draft
                           ? "Resume workout"
                           : "Start workout"}
                         <ArrowUpRight size={21} />
@@ -1301,58 +1346,28 @@ export default function Home() {
                           {weekCount}
                           <span>/5</span>
                         </strong>
-                        <small>SESSIONS THIS WEEK</small>
+                        <small>COMPLETE THIS WEEK</small>
                       </div>
                     </div>
                     <div className="week-mini">
-                      {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-                        <span
-                          key={i}
-                          className={
-                            week.some(
-                              (s) =>
-                                Number(
-                                  new Intl.DateTimeFormat("en-US", {
-                                    timeZone: "Asia/Kolkata",
-                                    weekday: "short",
-                                  })
-                                    .format(new Date(s.startedAt))
-                                    .replace(/Mon/, "0")
-                                    .replace(/Tue/, "1")
-                                    .replace(/Wed/, "2")
-                                    .replace(/Thu/, "3")
-                                    .replace(/Fri/, "4")
-                                    .replace(/Sat/, "5")
-                                    .replace(/Sun/, "6"),
-                                ) === i,
-                            )
-                              ? "complete-day"
-                              : [2, 6].includes(i)
-                                ? "rest-day"
-                                : ""
-                          }
-                        >
-                          {week.some(
-                            (s) =>
-                              new Date(s.startedAt).toLocaleDateString(
-                                "en-US",
-                                { timeZone: "Asia/Kolkata", weekday: "short" },
-                              ) ===
-                              ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
-                                i
-                              ],
-                          ) ? (
-                            <Check size={13} />
-                          ) : (
-                            d
-                          )}
-                        </span>
-                      ))}
+                      {weekdays.map((weekday, i) => {
+                        const complete = completedWeekdays.has(weekday);
+                        const partial = !complete && savedWeekdays.has(weekday);
+                        return (
+                          <span
+                            key={weekday}
+                            className={complete ? "complete-day" : partial ? "partial-day" : [2, 6].includes(i) ? "rest-day" : ""}
+                            title={`${weekday}${complete ? " · Complete workout" : partial ? " · Partial workout" : ""}`}
+                          >
+                            {complete ? <Check size={13} /> : partial ? <CircleMinus size={13} /> : weekday[0]}
+                          </span>
+                        );
+                      })}
                     </div>
                     <p>
                       {weekCount === 0
                         ? "A fresh week. Five opportunities to grow."
-                        : weekCount === 5
+                        : weekCount >= 5
                           ? "Five sessions. A whole week of work, earned."
                           : `${5 - weekCount} more sessions to complete your week.`}
                     </p>
@@ -1377,20 +1392,24 @@ export default function Home() {
                     {[0, 1, 2, 3, 4, 5, 6].map((i) => {
                       const wd = i + 1 === 7 ? 0 : i + 1;
                       const d = program.plan.find((d) => d.weekday === wd);
+                      const complete = d && completedDays.has(d.id);
+                      const partial = d && !complete && savedDays.has(d.id);
                       return d ? (
                         <button
                           key={i}
                           className={
                             "day-tile " +
                             (selectedDay.id === d.id ? "active-day" : "") +
-                            (weekDays.has(d.id) ? " day-finished" : "")
+                            (complete ? " day-finished" : partial ? " day-partial" : "")
                           }
                           onClick={() => setSelected(d)}
                         >
                           <div>
                             <span>{d.short}</span>
-                            {weekDays.has(d.id) ? (
+                            {complete ? (
                               <Check size={15} />
+                            ) : partial ? (
+                              <CircleMinus size={15} />
                             ) : selectedDay.id === d.id ? (
                               <span className="day-dot" />
                             ) : (
@@ -1405,11 +1424,7 @@ export default function Home() {
                             exercises
                           </small>
                           <div className="tile-bottom">
-                            {selectedDay.id === d.id
-                              ? "SELECTED"
-                              : weekDays.has(d.id)
-                                ? "COMPLETED"
-                                : d.label.toUpperCase()}
+                            {complete ? "COMPLETED" : partial ? "PARTIAL" : selectedDay.id === d.id ? "SELECTED" : d.label.toUpperCase()}
                             {selectedDay.id === d.id && <ArrowUpRight size={14} />}
                           </div>
                         </button>
@@ -1878,7 +1893,7 @@ export default function Home() {
             <p>
               {done === total
                 ? "Every set, checked off. Ready to save it?"
-                : `${total - done} sets left across ${active.movements.filter((m) => m.sets.some((s) => !s.done)).length} exercises. Next: ${focusMovement?.name ?? "your remaining sets"}.`}
+                : `${total - done} sets left across ${active.movements.filter((m) => m.sets.some((s) => !s.done)).length} exercises. Next: ${nextMovement?.name ?? "your remaining sets"}.`}
             </p>
             <div className="summary-stats">
               <div>
@@ -1899,10 +1914,15 @@ export default function Home() {
                 className="lime-button"
                 onClick={() => {
                   setFinishPrompt(false);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  focusExercise(nextMi);
                 }}
               >
                 Continue with next set <ArrowRight size={19} />
+              </button>
+            )}
+            {!active.finishedAt && (
+              <button className="outline-button finish-partial" onClick={pauseWorkout}>
+                Pause &amp; resume <Pause size={19} />
               </button>
             )}
             <button
@@ -1914,7 +1934,7 @@ export default function Home() {
             >
               {done === total
                 ? "Save workout"
-                : `Finish & save ${done} logged ${done === 1 ? "set" : "sets"}`}{" "}
+                : "Save partial workout"}{" "}
               <Check size={19} />
             </button>
             <button
@@ -1974,7 +1994,7 @@ export default function Home() {
             <div className="summary-symbol">
               <CheckCheck size={34} />
             </div>
-            <div className="eyebrow">ANOTHER SESSION IN THE BANK</div>
+            <div className="eyebrow">{remainingSets(summary) ? "PARTIAL WORKOUT SAVED" : "WORKOUT COMPLETE"}</div>
             <h2>
               Stronger than
               <br />
