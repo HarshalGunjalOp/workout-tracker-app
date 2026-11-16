@@ -1,13 +1,22 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { WARMUPS, type Day, type Exercise } from "@/lib/plan";
 import { readWeightSteps } from "@/lib/weight-steps";
 import { programDaySchema } from "@/lib/program";
 
+const warmupLabels: Record<keyof typeof WARMUPS, string> = {
+  W3: "3 ramp sets",
+  W2: "2 ramp sets",
+  W1: "1 ramp set",
+  W0: "No scheduled ramp sets",
+  WN: "Unloaded practice",
+};
+
 export function ProgramEditor({ day, onSave, onClose }: {
   day: Day; onSave: (day: Day) => void; onClose: () => void;
 }) {
+  const editorId = useId();
   const [initialDraft] = useState<Day>(() => {
     const draft = structuredClone(day);
     const legacy = readWeightSteps();
@@ -86,19 +95,28 @@ export function ProgramEditor({ day, onSave, onClose }: {
             <label className="program-wide">Muscles<input maxLength={200} value={ex.muscle} onChange={e => exercise(ex.id, { muscle: e.target.value })} /></label>
             {!ex.timed && <label>Weight increment (kg)<input required type="number" min={0.01} max={100} step="0.01" value={ex.weightStep || ""} onChange={e => exercise(ex.id, { weightStep: Number(e.target.value) })} /><small>Amount added or removed with +/−.</small></label>}
             <label>Sets<input required type="number" min={1} max={20} value={ex.sets || ""} onChange={e => exercise(ex.id, { sets: Number(e.target.value) })} /></label>
-            <label>Rest (seconds)<input required type="number" min={0} max={1800} value={ex.rest} onChange={e => exercise(ex.id, { rest: Number(e.target.value) })} /></label>
             <label>Minimum {ex.timed ? "seconds" : "reps"}<input required type="number" min={1} max={99999} value={ex.min || ""} onChange={e => exercise(ex.id, { min: Number(e.target.value) })} /></label>
             <label>Maximum {ex.timed ? "seconds" : "reps"}<input required type="number" min={ex.min || 1} max={99999} value={ex.max || ""} onChange={e => exercise(ex.id, { max: Number(e.target.value) })} /></label>
+            <label className="program-rest">Rest (seconds)<input required type="number" min={0} max={1800} value={ex.rest} onChange={e => exercise(ex.id, { rest: Number(e.target.value) })} /></label>
             {!ex.timed && <>
-              <label>Warm-up sets<select value={ex.warmupCode ?? ""} onChange={e => exercise(ex.id, { warmupCode: (e.target.value || undefined) as Exercise["warmupCode"] })}>
-                <option value="">Use workout warm-up</option>
-                {Object.entries(WARMUPS).map(([code, guidance]) => <option key={code} value={code}>{code} · {guidance}</option>)}
-              </select></label>
-              <label>Progression<select value={ex.progression ?? "D"} onChange={e => exercise(ex.id, { progression: e.target.value as Exercise["progression"] })}>
+              <label className="program-progression">Progression<select value={ex.progression ?? "D"} onChange={e => exercise(ex.id, { progression: e.target.value as Exercise["progression"] })}>
                 <option value="D">Double progression</option>
                 <option value="T">Uncapped performance</option>
                 <option value="N">Neck progression</option>
               </select></label>
+              <div className="program-wide program-warmup-field">
+                <label>Warm-up sets
+                  <select
+                    value={ex.warmupCode ?? ""}
+                    aria-describedby={ex.warmupCode ? `${editorId}-warmup-${index}` : undefined}
+                    onChange={e => exercise(ex.id, { warmupCode: (e.target.value || undefined) as Exercise["warmupCode"] })}
+                  >
+                    <option value="">Use workout warm-up</option>
+                    {Object.entries(warmupLabels).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                  </select>
+                </label>
+                {ex.warmupCode && <small id={`${editorId}-warmup-${index}`}>{WARMUPS[ex.warmupCode]}</small>}
+              </div>
             </>}
             <label className="program-wide">Description / coaching notes<textarea maxLength={2000} value={ex.cue} onChange={e => exercise(ex.id, { cue: e.target.value })} /></label>
           </div>

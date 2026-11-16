@@ -53,7 +53,8 @@ a:focus-visible {
   outline-offset: 4px;
 }
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus-visible {
   outline: 2px solid #99b64c;
   outline-offset: 0;
 }
@@ -4271,9 +4272,11 @@ svg {
 .program-editor h3 { margin-top: 28px; }
 .program-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .program-fields label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 600; min-width: 0; }
-.program-fields input, .program-fields textarea, .program-unit select { width: 100%; min-height: 44px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font-size: 16px; }
+.program-fields input, .program-fields textarea, .program-editor select { width: 100%; min-height: 44px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font-size: 16px; }
+.program-editor select { font-family: inherit; }
 .program-fields textarea { min-height: 88px; resize: vertical; }
 .program-fields small, .program-measure { color: var(--muted); font-size: 12px; font-weight: 400; }
+.program-warmup-field small { display: block; margin-top: 7px; }
 .program-wide { grid-column: 1 / -1; }
 .program-edit-exercise { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 18px 0; min-width: 0; }
 .program-edit-exercise legend { font-weight: 700; padding: 0 8px; }
@@ -4291,7 +4294,10 @@ svg {
 
 .program-unit { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; font-size: 13px; font-weight: 600; }
 @media (max-width: 600px) {
-  .program-editor form > .program-fields > label { grid-column: 1 / -1; }
+  .program-editor form > .program-fields > label, .program-rest, .program-progression { grid-column: 1 / -1; }
+}
+@media (max-width: 360px) {
+  .program-editor, .program-edit-exercise { padding-inline: 12px; }
 }
 
 .exercise-navigation { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin-bottom:20px; }
