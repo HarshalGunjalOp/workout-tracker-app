@@ -245,6 +245,8 @@ svg {
 }
 .avatar {
   display: flex;
+  flex-shrink: 0;
+  object-fit: cover;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -322,10 +324,10 @@ svg {
   background: var(--theme-surface-soft, #eff2e8);
 }
 .small-avatar {
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   background: var(--theme-surface-soft, #e7ecd9);
-  border: 3px solid white;
+  border: 2px solid var(--theme-surface, #fff);
   font-size: 10px;
 }
 .content {
@@ -2390,7 +2392,9 @@ svg {
     width: 14px;
   }
   .small-avatar {
-    display: none;
+    display: block;
+    width: 32px;
+    height: 32px;
   }
   .content {
     padding: 28px 22px 80px;

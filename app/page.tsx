@@ -1,5 +1,7 @@
 "use client";
+import Image from "next/image";
 import { useState, useEffect, useRef, useCallback } from "react";
+import tojiAvatar from "./assets/toji-fushiguro.jpeg";
 import {
   Trophy,
   ArrowUpRight,
@@ -666,7 +668,14 @@ export default function Home() {
             <Settings2 size={18} /> Preferences
           </button>
           <div className="profile">
-            <span className="avatar">HG</span>
+            <Image
+              className="avatar"
+              src={tojiAvatar}
+              alt="Harshal's profile picture — Toji Fushiguro"
+              width={36}
+              height={36}
+              unoptimized
+            />
             <div>
               <strong>Harshal Gunjal</strong>
               <small>Just you vs. you.</small>
@@ -712,7 +721,14 @@ export default function Home() {
             >
               <Settings2 size={18} />
             </button>
-            <span className="avatar small-avatar">H</span>
+            <Image
+              className="avatar small-avatar"
+              src={tojiAvatar}
+              alt="Harshal's profile picture — Toji Fushiguro"
+              width={36}
+              height={36}
+              unoptimized
+            />
           </div>
         </header>
         {saveError && (
